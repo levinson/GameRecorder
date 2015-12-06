@@ -17,7 +17,10 @@ namespace SmartBot.Plugins
 
         public bool HidePersonalInfo { get; set; }
 
-        public bool AlternateScreenshot { get; set; }
+        public bool AlternativeScreenshot { get; set; }
+
+        public bool LogFriendRequests { get; set; }
+        public bool LogWhispers { get; set; }
 
         public bool ScreenshotBeginTurn { get; set; }
         public bool ScreenshotEndTurn { get; set; }
@@ -39,7 +42,9 @@ namespace SmartBot.Plugins
             IncludeLogs = true;
             IncludeSeeds = true;
             HidePersonalInfo = true;
-            AlternateScreenshot = false;
+            AlternativeScreenshot = false;
+            LogFriendRequests = true;
+            LogWhispers = true;
             ScreenshotBeginTurn = true;
             ScreenshotEndTurn = true;
             ScreenshotChoice = true;
@@ -74,6 +79,12 @@ namespace SmartBot.Plugins
         // Log messages received before first turn
         private Queue<String> queuedLogMessages = new Queue<String>();
 
+        // Whispers received
+        private Queue<String> whispers = new Queue<String>();
+
+        // Friend requests received
+        private Queue<String> friendRequests = new Queue<String>();
+
         ~GameRecorderPlugin()
         {
             if (turnWriter != null)
@@ -97,6 +108,8 @@ namespace SmartBot.Plugins
             wonLastGame = false;
             turnWriter = null;
             queuedLogMessages.Clear();
+            whispers.Clear();
+            friendRequests.Clear();
         }
 
         public override void OnGameEnd()
@@ -108,6 +121,8 @@ namespace SmartBot.Plugins
             }
 
             CopySeeds();
+            SaveFriendRequests();
+            SaveWhispers();
 
             if (wonLastGame)
             {
@@ -124,12 +139,15 @@ namespace SmartBot.Plugins
         {
             if (turnWriter != null)
             {
-                // Flush all output to current log file
                 turnWriter.Flush();
             }
 
-            // Copy seeds - overwritten when game ends
+            // Overwritten when game ends
             CopySeeds();
+
+            // Appended at end of game
+            SaveFriendRequests();
+            SaveWhispers();
         }
 
         public override void OnActionExecute(API.Actions.Action action)
@@ -209,6 +227,16 @@ namespace SmartBot.Plugins
             wonLastGame = false;
         }
 
+        public override void OnWhisperReceived(Friend friend, string message)
+        {
+            whispers.Enqueue(GetTimestampPrefix() + friend.GetName() + " says " + message);
+        }
+
+        public override void OnFriendRequestReceived(FriendRequest request)
+        {
+            friendRequests.Enqueue(GetTimestampPrefix() + request.GetPlayerName());
+        }
+
         private void OnLogReceived(string message)
         {
             if (!settings.IncludeLogs)
@@ -229,6 +257,38 @@ namespace SmartBot.Plugins
         private static void Log(String message)
         {
             Bot.Log("[GameRecorder] " + message);
+        }
+
+        private void SaveFriendRequests()
+        {
+            if (settings.LogFriendRequests && currentGameFolder != null && friendRequests.Count > 0)
+            {
+                using (var writer = new StreamWriter(currentGameFolder + "\\FriendRequests.txt", true))
+                {
+                    foreach (string request in friendRequests)
+                    {
+                        writer.WriteLine(request);
+                    }
+                }
+            }
+
+            friendRequests.Clear();
+        }
+
+        private void SaveWhispers()
+        {
+            if (settings.LogWhispers && currentGameFolder != null && whispers.Count > 0)
+            {
+                using (var writer = new StreamWriter(currentGameFolder + "\\Whispers.txt", true))
+                {
+                    foreach (string whisper in whispers)
+                    {
+                        writer.WriteLine(whisper);
+                    }
+                }
+            }
+
+            whispers.Clear();
         }
 
         private void AddSuffixToGameFolder(string suffix)
@@ -256,7 +316,7 @@ namespace SmartBot.Plugins
             }
 
             // Capture game window
-            Image original = settings.AlternateScreenshot ?
+            Image original = settings.AlternativeScreenshot ?
                 WindowUtils.CaptureWindowAlternate(handle) :
                 WindowUtils.CaptureWindow(handle);
 
@@ -329,6 +389,11 @@ namespace SmartBot.Plugins
             turnWriter = new StreamWriter(outputPath);
         }
 
+        private string GetTimestampPrefix()
+        {
+            return "[" + DateTime.Now.ToString("HH:mm:ss") + "] ";
+        }
+
         private void WriteLogMessage(StreamWriter writer, string message)
         {
             if (settings.HidePersonalInfo)
@@ -341,7 +406,7 @@ namespace SmartBot.Plugins
             }
             else
             {
-                writer.WriteLine(message);
+                writer.WriteLine(GetTimestampPrefix() + message);
             }
         }
 
