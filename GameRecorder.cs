@@ -17,6 +17,8 @@ namespace SmartBot.Plugins
 
         public bool HidePersonalInfo { get; set; }
 
+        public bool AlternateScreenshot { get; set; }
+
         public bool ScreenshotBeginTurn { get; set; }
         public bool ScreenshotEndTurn { get; set; }
         public bool ScreenshotChoice { get; set; }
@@ -37,6 +39,7 @@ namespace SmartBot.Plugins
             IncludeLogs = true;
             IncludeSeeds = true;
             HidePersonalInfo = true;
+            AlternateScreenshot = false;
             ScreenshotBeginTurn = true;
             ScreenshotEndTurn = true;
             ScreenshotChoice = true;
@@ -243,18 +246,19 @@ namespace SmartBot.Plugins
             return str.Substring(0, 1).ToUpper() + str.Substring(1).ToLower();
         }
 
-
         private void TakeScreenshot(String action)
         {
-            IntPtr hearthstone = WindowUtils.FindWindow("Hearthstone");
-            if (hearthstone == IntPtr.Zero)
+            IntPtr handle = WindowUtils.FindWindow("Hearthstone");
+            if (handle == IntPtr.Zero)
             {
                 Log("Failed to find Hearthstone window!");
                 return;
             }
 
             // Capture game window
-            Image original = WindowUtils.CaptureWindow(hearthstone);
+            Image original = settings.AlternateScreenshot ?
+                WindowUtils.CaptureWindowAlternate(handle) :
+                WindowUtils.CaptureWindow(handle);
 
             // Crop image due to weird shit 
             Bitmap image = new Bitmap(original.Width - (settings.WindowLeftMargin + settings.WindowRightMargin),
@@ -420,6 +424,23 @@ namespace SmartBot.Plugins
         public static IntPtr FindWindow(String windowName)
         {
             return User32.FindWindow(null, windowName);
+        }
+
+        public static Bitmap CaptureWindowAlternate(IntPtr handle)
+        {
+            var rect = new User32.Rect();
+            User32.GetWindowRect(handle, ref rect);
+            
+            int width = rect.Right - rect.Left;
+            int height = rect.Bottom - rect.Top;
+
+            var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.CopyFromScreen(rect.Left, rect.Top, 0, 0, new Size(width, height), CopyPixelOperation.SourceCopy);
+            }
+
+            return bmp;
         }
 
         public static Image CaptureWindow(IntPtr handle)
