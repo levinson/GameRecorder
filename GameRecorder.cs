@@ -17,8 +17,6 @@ namespace SmartBot.Plugins
 
         public bool HidePersonalInfo { get; set; }
 
-        public bool AlternativeScreenshot { get; set; }
-
         public bool LogFriendRequests { get; set; }
         public bool LogWhispers { get; set; }
 
@@ -31,18 +29,12 @@ namespace SmartBot.Plugins
         public bool ScreenshotVictory { get; set; }
         public bool ScreenshotDefeat { get; set; }
 
-        public int WindowLeftMargin { get; set; }
-        public int WindowRightMargin { get; set; }
-        public int WindowTopMargin { get; set; }
-        public int WindowBottomMargin { get; set; }
-
         public GameRecorderSettings()
         {
             Name = "GameRecorder";
             IncludeLogs = true;
             IncludeSeeds = true;
             HidePersonalInfo = true;
-            AlternativeScreenshot = false;
             LogFriendRequests = true;
             LogWhispers = true;
             ScreenshotBeginTurn = true;
@@ -53,10 +45,6 @@ namespace SmartBot.Plugins
             ScreenshotLethal = true;
             ScreenshotVictory = true;
             ScreenshotDefeat = true;
-            WindowLeftMargin = 8;
-            WindowRightMargin = 8;
-            WindowTopMargin = 31;
-            WindowBottomMargin = 8;
         }
     }
 
@@ -85,6 +73,9 @@ namespace SmartBot.Plugins
         // Friend requests received
         private Queue<String> friendRequests = new Queue<String>();
 
+        // Stores action for next received screenshot
+        private string screenshotAction = null;
+
         ~GameRecorderPlugin()
         {
             if (turnWriter != null)
@@ -97,6 +88,7 @@ namespace SmartBot.Plugins
         {
             settings = (GameRecorderSettings)DataContainer;
             Debug.OnLogReceived += OnLogReceived;
+            GUI.OnScreenshotReceived += OnScreenshotReceived;
         }
 
         public override void OnGameBegin()
@@ -110,6 +102,7 @@ namespace SmartBot.Plugins
             queuedLogMessages.Clear();
             whispers.Clear();
             friendRequests.Clear();
+            screenshotAction = null;
         }
 
         public override void OnGameEnd()
@@ -306,28 +299,10 @@ namespace SmartBot.Plugins
             return str.Substring(0, 1).ToUpper() + str.Substring(1).ToLower();
         }
 
-        private void TakeScreenshot(String action)
+        private void OnScreenshotReceived(Bitmap image)
         {
-            IntPtr handle = WindowUtils.FindWindow("Hearthstone");
-            if (handle == IntPtr.Zero)
-            {
-                Log("Failed to find Hearthstone window!");
-                return;
-            }
-
-            // Capture game window
-            Image original = settings.AlternativeScreenshot ?
-                WindowUtils.CaptureWindowAlternate(handle) :
-                WindowUtils.CaptureWindow(handle);
-
-            // Crop image due to weird shit 
-            Bitmap image = new Bitmap(original.Width - (settings.WindowLeftMargin + settings.WindowRightMargin),
-                original.Height - (settings.WindowTopMargin + settings.WindowBottomMargin));
-
             using (Graphics g = Graphics.FromImage(image))
             {
-                g.DrawImage(original, new Point(-settings.WindowLeftMargin, -settings.WindowTopMargin));
-
                 if (settings.HidePersonalInfo)
                 {
                     SolidBrush grayBrush = new SolidBrush(Color.DimGray);
@@ -347,11 +322,17 @@ namespace SmartBot.Plugins
 
             // Save the modified image
             string turnAndActionNum = turnNum.ToString("D2") + "-" + actionNum.ToString("D2");
-            string fileName = turnAndActionNum + " " + action + ".jpg";
+            string fileName = turnAndActionNum + " " + screenshotAction + ".jpg";
             image.Save(currentGameFolder + "\\" + fileName, ImageFormat.Jpeg);
             Log("Captured screenshot: " + fileName);
 
             actionNum += 1;
+        }
+
+        private void TakeScreenshot(String action)
+        {
+            screenshotAction = action;
+            GUI.RequestScreenshotToBitmap();
         }
 
         private void SetupTurnLogger()
@@ -481,101 +462,6 @@ namespace SmartBot.Plugins
             }
 
             Log("Copied " + seedFiles.Length + " seed files");
-        }
-    }
-
-    public class WindowUtils
-    {
-        public static IntPtr FindWindow(String windowName)
-        {
-            return User32.FindWindow(null, windowName);
-        }
-
-        public static Bitmap CaptureWindowAlternate(IntPtr handle)
-        {
-            var rect = new User32.Rect();
-            User32.GetWindowRect(handle, ref rect);
-            
-            int width = rect.Right - rect.Left;
-            int height = rect.Bottom - rect.Top;
-
-            var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(bmp))
-            {
-                g.CopyFromScreen(rect.Left, rect.Top, 0, 0, new Size(width, height), CopyPixelOperation.SourceCopy);
-            }
-
-            return bmp;
-        }
-
-        public static Image CaptureWindow(IntPtr handle)
-        {
-            // get the hDC of the target window
-            IntPtr hdcSrc = User32.GetWindowDC(handle);
-            // get the size
-            User32.Rect rect = new User32.Rect();
-            User32.GetWindowRect(handle, ref rect);
-            int width = rect.Right - rect.Left;
-            int height = rect.Bottom - rect.Top;
-            // create a device context we can copy to
-            IntPtr hdcDest = GDI32.CreateCompatibleDC(hdcSrc);
-            // create a bitmap we can copy it to,
-            // using GetDeviceCaps to get the width/height
-            IntPtr hBitmap = GDI32.CreateCompatibleBitmap(hdcSrc, width, height);
-            // select the bitmap object
-            IntPtr hOld = GDI32.SelectObject(hdcDest, hBitmap);
-            // bitblt over
-            GDI32.BitBlt(hdcDest, 0, 0, width, height, hdcSrc, 0, 0, GDI32.SRCCOPY);
-            // restore selection
-            GDI32.SelectObject(hdcDest, hOld);
-            // clean up 
-            GDI32.DeleteDC(hdcDest);
-            User32.ReleaseDC(handle, hdcSrc);
-            // get a .NET image object for it
-            Image image = Image.FromHbitmap(hBitmap);
-            // free up the Bitmap object
-            GDI32.DeleteObject(hBitmap);
-            return image;
-        }
-
-        private class GDI32
-        {
-            public const int SRCCOPY = 0x00CC0020; // BitBlt dwRop parameter
-            [DllImport("gdi32.dll")]
-            public static extern bool BitBlt(IntPtr hObject, int nXDest, int nYDest,
-                int nWidth, int nHeight, IntPtr hObjectSource,
-                int nXSrc, int nYSrc, int dwRop);
-            [DllImport("gdi32.dll")]
-            public static extern IntPtr CreateCompatibleBitmap(IntPtr hDC, int nWidth,
-                int nHeight);
-            [DllImport("gdi32.dll")]
-            public static extern IntPtr CreateCompatibleDC(IntPtr hDC);
-            [DllImport("gdi32.dll")]
-            public static extern bool DeleteDC(IntPtr hDC);
-            [DllImport("gdi32.dll")]
-            public static extern bool DeleteObject(IntPtr hObject);
-            [DllImport("gdi32.dll")]
-            public static extern IntPtr SelectObject(IntPtr hDC, IntPtr hObject);
-        }
-
-        private class User32
-        {
-            [StructLayout(LayoutKind.Sequential)]
-            public struct Rect
-            {
-                public int Left;
-                public int Top;
-                public int Right;
-                public int Bottom;
-            }
-            [DllImport("user32.dll")]
-            public static extern IntPtr GetWindowDC(IntPtr hWnd);
-            [DllImport("user32.dll")]
-            public static extern IntPtr ReleaseDC(IntPtr hWnd, IntPtr hDC);
-            [DllImport("user32.dll")]
-            public static extern IntPtr GetWindowRect(IntPtr hWnd, ref Rect rect);
-            [DllImport("user32.dll", SetLastError = true)]
-            public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
         }
     }
 }
