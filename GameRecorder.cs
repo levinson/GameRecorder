@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 namespace SmartBot.Plugins
 {
     [Serializable]
-    public class bPluginDataContainer : PluginDataContainer
+    public class GameRecorderSettings : PluginDataContainer
     {
         public bool IncludeLogs { get; set; }
         public bool IncludeSeeds { get; set; }
@@ -31,7 +31,7 @@ namespace SmartBot.Plugins
         public int WindowTopMargin { get; set; }
         public int WindowBottomMargin { get; set; }
 
-        public bPluginDataContainer()
+        public GameRecorderSettings()
         {
             Name = "GameRecorder";
             IncludeLogs = true;
@@ -52,7 +52,7 @@ namespace SmartBot.Plugins
         }
     }
 
-    public class bPlugin : Plugin
+    public class GameRecorderPlugin : Plugin
     {
         // Folder to save screenshots for current game
         private string currentGameFolder = null;
@@ -61,51 +61,76 @@ namespace SmartBot.Plugins
         private int turnNum = 0;
         private int actionNum = 0;
 
-        public static void Log(String message)
+        private bool wonLastGame = false;
+
+        private GameRecorderSettings settings = null;
+
+        // Writer for current turn logging
+        private StreamWriter turnWriter = null;
+
+        // Log messages received before first turn
+        private Queue<String> queuedLogMessages = new Queue<String>();
+
+        ~GameRecorderPlugin()
         {
-            Bot.Log("[GameRecorder] " + message);
+            if (turnWriter != null)
+            {
+                turnWriter.Close();
+            }
         }
 
-        public bPluginDataContainer GetSettings()
+        public override void OnPluginCreated()
         {
-            return (bPluginDataContainer)DataContainer;
+            settings = (GameRecorderSettings)DataContainer;
+            Debug.OnLogReceived += OnLogReceived;
         }
 
         public override void OnGameBegin()
         {
-            base.OnGameBegin();
-
-            // Save logs for previous game here so that log files have flushed
-            SaveLogs();
-
             // Reset private variables
             currentGameFolder = null;
             turnNum = 0;
             actionNum = 0;
+            wonLastGame = false;
+            turnWriter = null;
+            queuedLogMessages.Clear();
         }
 
         public override void OnGameEnd()
         {
-            base.OnGameEnd();
+            if (turnWriter != null)
+            {
+                turnWriter.Close();
+                turnWriter = null;
+            }
 
             CopySeeds();
+
+            if (wonLastGame)
+            {
+                AddSuffixToGameFolder(" WIN");
+            }
+            else
+            {
+                AddSuffixToGameFolder(" LOSS");
+            }
+            
         }
 
         public override void OnStopped()
         {
-            base.OnStopped();
+            if (turnWriter != null)
+            {
+                // Flush all output to current log file
+                turnWriter.Flush();
+            }
 
-            // Save logs and seeds on user stop - overwritten when game is completed
-            SaveLogs();
+            // Copy seeds - overwritten when game ends
             CopySeeds();
         }
 
         public override void OnActionExecute(API.Actions.Action action)
         {
-            base.OnActionExecute(action);
-
-            var settings = GetSettings();
-
             if (action is API.Actions.ChoiceAction && settings.ScreenshotChoice)
             {
                 TakeScreenshot("Choice");
@@ -117,6 +142,10 @@ namespace SmartBot.Plugins
             else if (action is API.Actions.EndTurnAction && settings.ScreenshotEndTurn)
             {
                 TakeScreenshot("EndTurn");
+                if (turnWriter != null)
+                {
+                    turnWriter.Flush();
+                }
             }
             else if (action is API.Actions.ResimulateAction && settings.ScreenshotResimulate)
             {
@@ -126,8 +155,6 @@ namespace SmartBot.Plugins
 
         public override void OnTurnBegin()
         {
-            base.OnTurnBegin();
-
             turnNum += 1;
             actionNum = 0;
 
@@ -143,7 +170,9 @@ namespace SmartBot.Plugins
                 Directory.CreateDirectory(currentGameFolder);
             }
 
-            if (GetSettings().ScreenshotBeginTurn)
+            SetupTurnLogger();
+
+            if (settings.ScreenshotBeginTurn)
             {
                 TakeScreenshot("BeginTurn");
             }
@@ -151,8 +180,7 @@ namespace SmartBot.Plugins
 
         public override void OnLethal()
         {
-            base.OnLethal();
-            if (GetSettings().ScreenshotLethal)
+            if (settings.ScreenshotLethal)
             {
                 TakeScreenshot("Lethal");
             }
@@ -160,24 +188,44 @@ namespace SmartBot.Plugins
 
         public override void OnVictory()
         {
-            base.OnVictory();
-            if (GetSettings().ScreenshotVictory)
+            if (settings.ScreenshotVictory)
             {
                 TakeScreenshot("Victory");
             }
 
-            AddSuffixToGameFolder(" WIN");
+            wonLastGame = true;
         }
 
         public override void OnDefeat()
         {
-            base.OnDefeat();
-            if (GetSettings().ScreenshotDefeat)
+            if (settings.ScreenshotDefeat)
             {
                 TakeScreenshot("Defeat");
             }
 
-            AddSuffixToGameFolder(" LOSS");
+            wonLastGame = false;
+        }
+
+        private void OnLogReceived(string message)
+        {
+            if (!settings.IncludeLogs)
+            {
+                return;
+            }
+
+            if (turnWriter != null)
+            {
+                WriteLogMessage(turnWriter, message);
+            }
+            else
+            {
+                queuedLogMessages.Enqueue(message);
+            }
+        }
+
+        private static void Log(String message)
+        {
+            Bot.Log("[GameRecorder] " + message);
         }
 
         private void AddSuffixToGameFolder(string suffix)
@@ -198,8 +246,6 @@ namespace SmartBot.Plugins
 
         private void TakeScreenshot(String action)
         {
-            var settings = GetSettings();
-
             IntPtr hearthstone = WindowUtils.FindWindow("Hearthstone");
             if (hearthstone == IntPtr.Zero)
             {
@@ -244,10 +290,8 @@ namespace SmartBot.Plugins
             actionNum += 1;
         }
 
-        private void SaveLogs()
+        private void SetupTurnLogger()
         {
-            var settings = GetSettings();
-
             if (!settings.IncludeLogs)
             {
                 return;
@@ -255,124 +299,50 @@ namespace SmartBot.Plugins
 
             if (currentGameFolder == null)
             {
-                // No turns yet
+                Log("Failed to setup output logging since game folder is not defined!");
                 return;
             }
 
-            // Find two most recent log files
-            DateTime mostRecentTime = new DateTime(1900, 1, 1);
-            string mostRecentLog = null;
-
-            foreach (string fileName in Directory.GetFiles("Logs"))
+            if (turnWriter != null)
             {
-                FileInfo fileInfo = new FileInfo(fileName);
-                DateTime created = fileInfo.LastWriteTime;
-
-                if (created > mostRecentTime)
-                {
-                    mostRecentLog = fileName;
-                    mostRecentTime = created;
-                }
-            }
-
-            if (mostRecentLog == null)
-            {
-                Log("Failed to locate any log files!");
-                return;
-            }
-
-            List<string> logLines = new List<string>();
-
-            // Load log lines from start of new game
-            bool gameStartFound = false;
-            using (FileStream fs = File.OpenRead(mostRecentLog))
-            using (BufferedStream bs = new BufferedStream(fs))
-            using (StreamReader sr = new StreamReader(bs))
-            {
-                string line;
-                while ((line = sr.ReadLine()) != null)
-                {
-                    if (line.Contains("Current Rank : "))
-                    {
-                        gameStartFound = true;
-                        logLines.Clear();
-                    }
-                    logLines.Add(line);
-                }
-            }
-
-            if (!gameStartFound)
-            {
-                Log("Failed to save logs since start of game cannot be found!");
-                return;
-            }
-
-            // Write the log output for last game
-            bool staleLogs = false;
-            var savedFilePaths = new List<string>();
-            StreamWriter writer;
-            string outputPath = currentGameFolder + "\\" + "BeginGame_Logs.txt";
-            using (writer = new StreamWriter(outputPath))
-            {
-                int turnNum = 0;
-                foreach (string line in logLines)
-                {
-                    // Look for end of turns
-                    if (line.Contains("<-------New Turn-------->"))
-                    {
-                        turnNum += 1;
-
-                        if (turnNum > this.turnNum)
-                        {
-                            staleLogs = true;
-                            break;
-                        }
-
-                        // Start writing to file for next turn
-                        savedFilePaths.Add(outputPath);
-                        outputPath = currentGameFolder + "\\" + "Turn_" + turnNum + "_Logs.txt";
-                        writer.Close();
-                        writer = new StreamWriter(outputPath);
-                    }
-
-                    if (settings.HidePersonalInfo)
-                    {
-                        // Ignore auth logs
-                        if (!line.Contains(@"[DEBUG][AUTH]"))
-                        {
-                            // Hide timestamp
-                            writer.WriteLine(line.Substring(11));
-                        }
-                    }
-                    else
-                    {
-                        writer.WriteLine(line);
-                    }
-                }
-            }
-
-            savedFilePaths.Add(outputPath);
-
-            if (staleLogs)
-            {
-                // Delete any files that were saved
-                foreach (string filePath in savedFilePaths)
-                {
-                    File.Delete(filePath);
-                }
-
-                Log("Failed to find logs for current game!");
+                // Close the existing log file
+                turnWriter.Close();
             }
             else
             {
-                Log("Saved " + savedFilePaths.Count + " log files");
+                // Write queued log messages now
+                using (var writer = new StreamWriter(currentGameFolder + "\\BeginGame_Logs.txt"))
+                {
+                    foreach (string message in queuedLogMessages)
+                    {
+                        WriteLogMessage(writer, message);
+                    }
+                }
+            }
+
+            // Setup new log file for this turn
+            string outputPath = currentGameFolder + "\\" + "Turn_" + turnNum + "_Logs.txt";
+            turnWriter = new StreamWriter(outputPath);
+        }
+
+        private void WriteLogMessage(StreamWriter writer, string message)
+        {
+            if (settings.HidePersonalInfo)
+            {
+                // Ignore auth logs
+                if (!message.Contains("[DEBUG][AUTH]"))
+                {
+                    writer.WriteLine(message);
+                }
+            }
+            else
+            {
+                writer.WriteLine(message);
             }
         }
 
         private void CopySeeds()
         {
-            var settings = GetSettings();
-
             if (!settings.IncludeSeeds)
             {
                 return;
