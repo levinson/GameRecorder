@@ -13,6 +13,7 @@ namespace SmartBot.Plugins
     public class GameRecorderSettings : PluginDataContainer
     {
         public bool IncludeLogs { get; set; }
+        public bool IncludeMulligan { get; set; }
         public bool IncludeSeeds { get; set; }
 
         public bool HidePersonalInfo { get; set; }
@@ -33,6 +34,7 @@ namespace SmartBot.Plugins
         {
             Name = "GameRecorder";
             IncludeLogs = true;
+            IncludeMulligan = true;
             IncludeSeeds = true;
             HidePersonalInfo = true;
             LogFriendRequests = true;
@@ -183,6 +185,8 @@ namespace SmartBot.Plugins
                 currentGameFolder = "RecordedGames\\" + dateTime + " " + friend + " vs. " + enemy;
                 Directory.CreateDirectory(currentGameFolder);
                 gameStarted = true;
+
+                SaveMulligan();
             }
 
             SetupTurnLogger();
@@ -380,6 +384,65 @@ namespace SmartBot.Plugins
             {
                 writer.WriteLine(GetTimestampPrefix() + message);
             }
+        }
+
+        private void SaveMulligan()
+        {
+            if (!settings.IncludeMulligan)
+            {
+                return;
+            }
+
+            // Find the most recent SmartMulligan log file
+            DateTime mostRecentTime = new DateTime(1900, 1, 1);
+            string currentMulliganFile = null;
+            foreach (string fileName in Directory.GetFiles("MulliganProfiles\\MulliganArchives"))
+            {
+                FileInfo fileInfo = new FileInfo(fileName);
+                DateTime modified = fileInfo.LastWriteTime;
+
+                if (modified > mostRecentTime)
+                {
+                    mostRecentTime = modified;
+                    currentMulliganFile = fileName;
+                }
+            }
+
+            if (currentMulliganFile == null)
+            {
+                Log("Failed to find any SmartMulligan files!");
+                return;
+            }
+
+            // Build mulligan log entries for this game
+            var mulliganLogs = new List<String>();
+            using (FileStream fs = File.OpenRead(currentMulliganFile))
+            using (BufferedStream bs = new BufferedStream(fs))
+            using (StreamReader sr = new StreamReader(bs))
+            {
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    if (line.Contains("=============================================="))
+                    {
+                        mulliganLogs.Clear();
+                    }
+                    else
+                    {
+                        mulliganLogs.Add(line);
+                    }
+                }
+            }
+
+            using (StreamWriter writer = new StreamWriter(currentGameFolder + "\\SmartMulligan.txt"))
+            {
+                foreach (string line in mulliganLogs)
+                {
+                    writer.WriteLine(line);
+                }
+            }
+
+            Log("Copied smart mulligan output");
         }
 
         private void CopySeeds()
