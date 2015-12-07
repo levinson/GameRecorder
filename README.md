@@ -4,7 +4,7 @@ Game Recorder is a plugin for [SmartBot](http://sb-forum.com/) (an intelligent H
 
 ## Installation & Usage
 
-1. Download the [GameRecorder.cs](https://github.com/levinson/SmartBotPlugins/raw/master/GameRecorder.cs) file to your SmartBot ```Plugins``` directory.
+1. Download the [GameRecorder.cs](https://github.com/levinson/GameRecorder/raw/master/GameRecorder.cs) file to your SmartBot ```Plugins``` directory.
 2. Enable the GameRecorder plugin and set desired configurations (see next section).
 3. Start the bot and watch the ```RecordedGames``` folder in its root directory.
   * A new folder is created for each game (e.g. ```2015-12-05 163737 Rogue vs. Shaman```)
