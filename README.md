@@ -27,7 +27,7 @@ Here are the meanings behind the many configuration parameters:
 Name|Description
 ---|---
 HidePersonalInfo|Enable this to gray out personal info in screenshots, and to remove timestamps and auth messages from logs (highly recommended).
-IncludeLogs|Enable this to generate log files each turn (or when bot is stopped).
+IncludeLogs|Enable this to generate turn-by-turn log files.
 IncludeMulligan|Enable this to copy mulligan output from [SmartMulligan](http://sb-forum.com/index.php?/topic/5930-requestfeedback-smartmulligan/) at start of turn.
 IncludeSeeds|Enable this to copy seed files at end of game (or when bot is stopped).
 LogFriendRequests|Enable this to log friend requests after each game (or when bot is stopped).
