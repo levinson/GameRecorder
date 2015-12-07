@@ -54,6 +54,7 @@ namespace SmartBot.Plugins
         private string currentGameFolder = null;
 
         // Keep track of the turn and action number
+        private bool gameStarted = false;
         private int turnNum = 0;
         private int actionNum = 0;
 
@@ -91,10 +92,11 @@ namespace SmartBot.Plugins
             GUI.OnScreenshotReceived += OnScreenshotReceived;
         }
 
-        public override void OnGameBegin()
+        private void Reset()
         {
             // Reset private variables
             currentGameFolder = null;
+            gameStarted = false;
             turnNum = 0;
             actionNum = 0;
             wonLastGame = false;
@@ -117,15 +119,14 @@ namespace SmartBot.Plugins
             SaveFriendRequests();
             SaveWhispers();
 
-            if (wonLastGame)
+            if (gameStarted)
             {
-                AddSuffixToGameFolder(" WIN");
+                string suffix = wonLastGame ? " WIN" : " LOSS";
+                string newGameFolder = currentGameFolder + suffix;
+                Directory.Move(currentGameFolder, newGameFolder);
             }
-            else
-            {
-                AddSuffixToGameFolder(" LOSS");
-            }
-            
+
+            Reset();
         }
 
         public override void OnStopped()
@@ -172,16 +173,16 @@ namespace SmartBot.Plugins
             turnNum += 1;
             actionNum = 0;
 
-            if (currentGameFolder == null)
+            if (!gameStarted)
             {
                 // Create folder for the new game
                 string dateTime = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
                 var board = API.Bot.CurrentBoard;
                 var friend = Capitalize(board.FriendClass.ToString());
                 var enemy = Capitalize(board.EnemyClass.ToString());
-
                 currentGameFolder = "RecordedGames\\" + dateTime + " " + friend + " vs. " + enemy;
                 Directory.CreateDirectory(currentGameFolder);
+                gameStarted = true;
             }
 
             SetupTurnLogger();
@@ -202,7 +203,7 @@ namespace SmartBot.Plugins
 
         public override void OnVictory()
         {
-            if (settings.ScreenshotVictory)
+            if (settings.ScreenshotVictory && gameStarted)
             {
                 TakeScreenshot("Victory");
             }
@@ -212,7 +213,7 @@ namespace SmartBot.Plugins
 
         public override void OnDefeat()
         {
-            if (settings.ScreenshotDefeat)
+            if (settings.ScreenshotDefeat && gameStarted)
             {
                 TakeScreenshot("Defeat");
             }
@@ -222,12 +223,18 @@ namespace SmartBot.Plugins
 
         public override void OnWhisperReceived(Friend friend, string message)
         {
-            whispers.Enqueue(GetTimestampPrefix() + friend.GetName() + " says " + message);
+            if (settings.LogWhispers)
+            {
+                whispers.Enqueue(GetTimestampPrefix() + friend.GetName() + " says " + message);
+            }
         }
 
         public override void OnFriendRequestReceived(FriendRequest request)
         {
-            friendRequests.Enqueue(GetTimestampPrefix() + request.GetPlayerName());
+            if (settings.LogFriendRequests)
+            {
+                friendRequests.Enqueue(GetTimestampPrefix() + request.GetPlayerName());
+            }
         }
 
         private void OnLogReceived(string message)
@@ -254,7 +261,7 @@ namespace SmartBot.Plugins
 
         private void SaveFriendRequests()
         {
-            if (settings.LogFriendRequests && currentGameFolder != null && friendRequests.Count > 0)
+            if (gameStarted && friendRequests.Count > 0)
             {
                 using (var writer = new StreamWriter(currentGameFolder + "\\FriendRequests.txt", true))
                 {
@@ -263,14 +270,14 @@ namespace SmartBot.Plugins
                         writer.WriteLine(request);
                     }
                 }
-            }
 
-            friendRequests.Clear();
+                friendRequests.Clear();
+            }
         }
 
         private void SaveWhispers()
         {
-            if (settings.LogWhispers && currentGameFolder != null && whispers.Count > 0)
+            if (gameStarted && whispers.Count > 0)
             {
                 using (var writer = new StreamWriter(currentGameFolder + "\\Whispers.txt", true))
                 {
@@ -279,18 +286,8 @@ namespace SmartBot.Plugins
                         writer.WriteLine(whisper);
                     }
                 }
-            }
 
-            whispers.Clear();
-        }
-
-        private void AddSuffixToGameFolder(string suffix)
-        {
-            if (currentGameFolder != null)
-            {
-                string newGameFolder = currentGameFolder + suffix;
-                Directory.Move(currentGameFolder, newGameFolder);
-                currentGameFolder = newGameFolder;
+                whispers.Clear();
             }
         }
 
@@ -307,13 +304,13 @@ namespace SmartBot.Plugins
                 {
                     SolidBrush grayBrush = new SolidBrush(Color.DimGray);
 
-                    int rectangleWidth = image.Width / 8;
+                    int rectangleWidth = (int)(0.2 * image.Width);
                     int rectangleHeight = (int)(0.12 * image.Height);
 
                     Rectangle[] grayBoxes = new Rectangle[] {
                         new Rectangle(1, 1, rectangleWidth, rectangleHeight),
-                        new Rectangle(1, (int)(0.80 * image.Height), rectangleWidth, rectangleHeight),
-                        new Rectangle(1, (int)(0.90 * image.Height), (int)(1.5 * rectangleWidth), rectangleHeight)
+                        new Rectangle(1, (int)(0.8 * image.Height), rectangleWidth, rectangleHeight),
+                        new Rectangle(1, (int)(0.9 * image.Height), rectangleWidth, rectangleHeight)
                     };
 
                     g.FillRectangles(grayBrush, grayBoxes);
@@ -324,7 +321,7 @@ namespace SmartBot.Plugins
             string turnAndActionNum = turnNum.ToString("D2") + "-" + actionNum.ToString("D2");
             string fileName = turnAndActionNum + " " + screenshotAction + ".jpg";
             image.Save(currentGameFolder + "\\" + fileName, ImageFormat.Jpeg);
-            Log("Captured screenshot: " + fileName);
+            Log("Saved screenshot: " + fileName);
 
             actionNum += 1;
         }
@@ -339,12 +336,6 @@ namespace SmartBot.Plugins
         {
             if (!settings.IncludeLogs)
             {
-                return;
-            }
-
-            if (currentGameFolder == null)
-            {
-                Log("Failed to setup output logging since game folder is not defined!");
                 return;
             }
 
@@ -393,14 +384,8 @@ namespace SmartBot.Plugins
 
         private void CopySeeds()
         {
-            if (!settings.IncludeSeeds)
+            if (!settings.IncludeSeeds || !gameStarted)
             {
-                return;
-            }
-
-            if (currentGameFolder == null)
-            {
-                // No turns yet
                 return;
             }
 
