@@ -26,10 +26,10 @@ Here are the meanings behind the many configuration parameters:
 
 Name|Description
 ---|---
-HidePersonalInfo|Enable this to gray out personal info in screenshots, and to remove timestamps and auth messages from logs. Highly recommended to keep this enabled.
-IncludeLogs|Enable this to generate game start and turn-by-turn log files at start of next game or when bot is stopped.
+HidePersonalInfo|Enable this to gray out personal info in screenshots, and to remove timestamps and auth messages from logs (highly recommended).
+IncludeLogs|Enable this to generate log files each turn (or when bot is stopped).
 IncludeSeeds|Enable this to copy seed files at end of game (or when bot is stopped).
-LogFriendRequests|Enable this to log friend request after each game (or when bot is stopped).
+LogFriendRequests|Enable this to log friend requests after each game (or when bot is stopped).
 LogWhispers|Enable this to log received whispers after each game (or when bot is stopped).
 ScreenshotBeginTurn|Whether to capture screenshot at beginning of turn.
 ScreenshotChoice|Whether to capture screenshot of choice events (e.g. Discover).
