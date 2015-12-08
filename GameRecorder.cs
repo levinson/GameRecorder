@@ -24,9 +24,27 @@ namespace SmartBot.Plugins
         }
     }
 
+    public class LanguageItemsSource : IItemsSource
+    {
+        public ItemCollection GetValues()
+        {
+            ItemCollection langs = new ItemCollection();
+            foreach (string lang in new string[] {
+                "deDE", "enGB", "enUS", "esES", "esMX", "frFR", "itIT",
+                "jaJP", "koKR", "plPL", "ptBR", "ruRU", "zhCN", "zhTW" })
+            {
+                langs.Add(lang);
+            }
+            return langs;
+        }
+    }
+
     [Serializable]
     public class GameRecorderSettings : PluginDataContainer
     {
+        [ItemsSource(typeof(LanguageItemsSource))]
+        public string Language { get; set; }
+
         [ItemsSource(typeof(ImageFormatItemsSource))]
         public string ImageFormat { get; set; }
         public int ImageQuality { get; set; }
@@ -58,6 +76,7 @@ namespace SmartBot.Plugins
         public GameRecorderSettings()
         {
             Name = "GameRecorder";
+            Language = "enUS";
             this.ImageFormat = "Jpeg";
             ImageQuality = 50;
             ImageResizeEnabled = false;
