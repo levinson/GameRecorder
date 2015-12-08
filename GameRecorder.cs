@@ -4,14 +4,32 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Xceed.Wpf.Toolkit.PropertyGrid.Attributes;
 
 namespace SmartBot.Plugins
 {
+    public class ImageFormatItemsSource : IItemsSource
+    {
+        public ItemCollection GetValues()
+        {
+            ItemCollection formats = new ItemCollection();
+            var formatConverter = new ImageFormatConverter();
+            foreach (var encoder in ImageCodecInfo.GetImageEncoders())
+            {
+                formats.Add(encoder.FormatDescription);
+            }
+            return formats;
+        }
+    }
+
     [Serializable]
     public class GameRecorderSettings : PluginDataContainer
     {
+        [ItemsSource(typeof(ImageFormatItemsSource))]
+        public string ImageFormat { get; set; }
+        public int ImageQuality { get; set; }
+
         public bool IncludeLogs { get; set; }
         public bool IncludeMulligan { get; set; }
         public bool IncludeSeeds { get; set; }
@@ -33,6 +51,8 @@ namespace SmartBot.Plugins
         public GameRecorderSettings()
         {
             Name = "GameRecorder";
+            this.ImageFormat = "Jpeg";
+            ImageQuality = 50;
             IncludeLogs = true;
             IncludeMulligan = true;
             IncludeSeeds = true;
@@ -78,6 +98,8 @@ namespace SmartBot.Plugins
 
         // Stores action for next received screenshot
         private string screenshotAction = null;
+
+        private ImageFormatConverter imageFormatConverter = new ImageFormatConverter();
 
         ~GameRecorderPlugin()
         {
@@ -225,6 +247,14 @@ namespace SmartBot.Plugins
             wonLastGame = false;
         }
 
+        public override void OnConcede()
+        {
+            if (settings.ScreenshotConcede && gameStarted)
+            {
+                TakeScreenshot("Concede");
+            }
+        }
+
         public override void OnWhisperReceived(Friend friend, string message)
         {
             if (settings.LogWhispers)
@@ -321,13 +351,41 @@ namespace SmartBot.Plugins
                 }
             }
 
-            // Save the modified image
-            string turnAndActionNum = turnNum.ToString("D2") + "-" + actionNum.ToString("D2");
-            string fileName = turnAndActionNum + " " + screenshotAction + ".jpg";
-            image.Save(currentGameFolder + "\\" + fileName, ImageFormat.Jpeg);
+            // Build the encoder params
+            var format = (ImageFormat)imageFormatConverter.ConvertFromString(settings.ImageFormat);
+            var encoderParams = GetEncoderParams(settings.ImageQuality);
+
+            // Build screenshot file name
+            string turnAndAction = turnNum.ToString("D2") + "-" + actionNum.ToString("D2");
+            string fileExtension = settings.ImageFormat.Equals("JPEG") ? "jpg" : settings.ImageFormat.ToLower();
+            string fileName = turnAndAction + " " + screenshotAction + "." + fileExtension;
+
+            // Save with given format and quality
+            image.Save(currentGameFolder + "\\" + fileName, GetEncoder(format), encoderParams);
             Log("Saved screenshot: " + fileName);
 
             actionNum += 1;
+        }
+
+        private EncoderParameters GetEncoderParams(int quality)
+        {
+            var encoderParams = new EncoderParameters(1);
+            encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, quality);
+            return encoderParams;
+        }
+
+        private ImageCodecInfo GetEncoder(ImageFormat format)
+        {
+            ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
+
+            foreach (ImageCodecInfo codec in codecs)
+            {
+                if (codec.FormatID == format.Guid)
+                {
+                    return codec;
+                }
+            }
+            return null;
         }
 
         private void TakeScreenshot(String action)
