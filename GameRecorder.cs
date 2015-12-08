@@ -53,6 +53,8 @@ namespace SmartBot.Plugins
         public bool ScreenshotVictory { get; set; }
         public bool ScreenshotDefeat { get; set; }
 
+        public bool DeleteWins { get; set; }
+
         public GameRecorderSettings()
         {
             Name = "GameRecorder";
@@ -76,6 +78,7 @@ namespace SmartBot.Plugins
             ScreenshotLethal = true;
             ScreenshotVictory = true;
             ScreenshotDefeat = true;
+            DeleteWins = false;
         }
     }
 
@@ -148,6 +151,11 @@ namespace SmartBot.Plugins
 
         public override void OnGameEnd()
         {
+            EndGame();
+        }
+
+        private void EndGame()
+        {
             if (turnWriter != null)
             {
                 turnWriter.Close();
@@ -160,9 +168,16 @@ namespace SmartBot.Plugins
 
             if (gameStarted)
             {
-                string suffix = wonLastGame ? " WIN" : " LOSS";
-                string newGameFolder = currentGameFolder + suffix;
-                Directory.Move(currentGameFolder, newGameFolder);
+                if (settings.DeleteWins && wonLastGame)
+                {
+                    Directory.Delete(currentGameFolder, true);
+                }
+                else
+                {
+                    string suffix = wonLastGame ? " WIN" : " LOSS";
+                    string newGameFolder = currentGameFolder + suffix;
+                    Directory.Move(currentGameFolder, newGameFolder);
+                }
             }
 
             Reset();
@@ -185,6 +200,12 @@ namespace SmartBot.Plugins
 
         public override void OnHandleMulligan(List<Card.Cards> choices, Card.CClass enemyClass, Card.CClass friendClass)
         {
+            // Check if OnGameEnd was never fired
+            if (gameStarted)
+            {
+                EndGame();
+            }
+
             CreateGameFolder(friendClass, enemyClass);
         }
 
@@ -194,6 +215,8 @@ namespace SmartBot.Plugins
             {
                 TakeScreenshot("Mulligan");
             }
+
+            SaveMulligan();
         }
 
         public override void OnActionExecute(API.Actions.Action action)
@@ -328,8 +351,6 @@ namespace SmartBot.Plugins
                 currentGameFolder = "RecordedGames\\" + dateTime + " " + friend + " vs. " + enemy;
                 Directory.CreateDirectory(currentGameFolder);
                 gameStarted = true;
-
-                SaveMulligan();
             }
         }
 
@@ -542,9 +563,9 @@ namespace SmartBot.Plugins
                 }
             }
 
-            if (currentMulliganFile == null)
+            if (currentMulliganFile == null || DateTime.Now.AddMinutes(-1).CompareTo(mostRecentTime) > 0)
             {
-                Log("Failed to find any SmartMulligan files!");
+                Log("Failed to find a current SmartMulligan file!");
                 return;
             }
 
@@ -602,9 +623,9 @@ namespace SmartBot.Plugins
                 }
             }
 
-            if (currentSeedDir == null)
+            if (currentSeedDir == null || DateTime.Now.AddMinutes(-1).CompareTo(mostRecentTime) > 0)
             {
-                Log("Failed to locate any seeds!");
+                Log("Failed to locate current seeds!");
                 return;
             }
 
