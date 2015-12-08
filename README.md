@@ -27,8 +27,10 @@ Here are the meanings behind the many configuration parameters:
 Name|Description
 ---|---
 HidePersonalInfo|Enable this to gray out personal info in screenshots, and to remove timestamps and auth messages from logs (highly recommended).
+ImageFormat|Select the image format for saving screenshots.
+ImageQuality|Select the image quality (Jpeg format only).
 IncludeLogs|Enable this to generate turn-by-turn log files.
-IncludeMulligan|Enable this to copy mulligan output from [SmartMulligan](http://sb-forum.com/index.php?/topic/5930-requestfeedback-smartmulligan/) at start of turn.
+IncludeMulligan|Enable this to copy mulligan output from [SmartMulligan](https://github.com/ArthurFairchild/MulliganProfiles/tree/SmartMulliganV2/MulliganProfiles) at start of turn.
 IncludeSeeds|Enable this to copy seed files at end of game (or when bot is stopped).
 LogFriendRequests|Enable this to log friend requests after each game (or when bot is stopped).
 LogWhispers|Enable this to log received whispers after each game (or when bot is stopped).
