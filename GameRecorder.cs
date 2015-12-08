@@ -6,6 +6,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Xceed.Wpf.Toolkit.PropertyGrid.Attributes;
 
 namespace SmartBot.Plugins
@@ -24,26 +25,26 @@ namespace SmartBot.Plugins
         }
     }
 
-    public class LanguageItemsSource : IItemsSource
+    public class LocaleItemsSource : IItemsSource
     {
         public ItemCollection GetValues()
         {
-            ItemCollection langs = new ItemCollection();
+            ItemCollection locales = new ItemCollection();
             foreach (string lang in new string[] {
                 "deDE", "enGB", "enUS", "esES", "esMX", "frFR", "itIT",
                 "jaJP", "koKR", "plPL", "ptBR", "ruRU", "zhCN", "zhTW" })
             {
-                langs.Add(lang);
+                locales.Add(lang);
             }
-            return langs;
+            return locales;
         }
     }
 
     [Serializable]
     public class GameRecorderSettings : PluginDataContainer
     {
-        [ItemsSource(typeof(LanguageItemsSource))]
-        public string Language { get; set; }
+        [ItemsSource(typeof(LocaleItemsSource))]
+        public string Locale { get; set; }
 
         [ItemsSource(typeof(ImageFormatItemsSource))]
         public string ImageFormat { get; set; }
@@ -76,7 +77,7 @@ namespace SmartBot.Plugins
         public GameRecorderSettings()
         {
             Name = "GameRecorder";
-            Language = "enUS";
+            Locale = "enUS";
             this.ImageFormat = "Jpeg";
             ImageQuality = 50;
             ImageResizeEnabled = false;
@@ -132,6 +133,10 @@ namespace SmartBot.Plugins
 
         private ImageFormatConverter imageFormatConverter = new ImageFormatConverter();
 
+        // Contains card name translations (for non en-US locales)
+        private Dictionary<string, string> nameTranslations = null;
+        private string nameTranslationLocale = null;
+
         ~GameRecorderPlugin()
         {
             Dispose();
@@ -143,7 +148,11 @@ namespace SmartBot.Plugins
             {
                 turnWriter.Close();
                 turnWriter = null;
-            }            
+            }
+
+            // Unregister event handlers
+            Debug.OnLogReceived -= OnLogReceived;
+            GUI.OnScreenshotReceived -= OnScreenshotReceived;
         }
 
         public override void OnPluginCreated()
@@ -339,19 +348,70 @@ namespace SmartBot.Plugins
 
         private void OnLogReceived(string message)
         {
-            if (!settings.IncludeLogs)
+            // TODO: Ask wirmate to add uncaught exception handling
+            try
             {
+                if (!settings.IncludeLogs)
+                {
+                    return;
+                }
+
+                if (turnWriter != null)
+                {
+                    WriteLogMessage(turnWriter, message);
+                }
+                else
+                {
+                    queuedLogMessages.Enqueue(message);
+                }
+            }
+            catch(Exception e)
+            {
+                Log("Error while handling received log message: " + e.StackTrace);
+            }
+        }
+
+        private void InitializeNameTranslations()
+        {
+            nameTranslationLocale = settings.Locale;
+            var englishCardsFile = new FileInfo("CardDatabase\\cardDB." + nameTranslationLocale + ".xml");
+            var nativeCardsFile = new FileInfo("CardDatabase\\cardDB." + nameTranslationLocale + ".xml");
+
+            if (!englishCardsFile.Exists || !nativeCardsFile.Exists)
+            {
+                Log("Failed to initialize name translations - no card database found!");
                 return;
             }
 
-            if (turnWriter != null)
+            XDocument nativeContent = XDocument.Load(nativeCardsFile.FullName);
+            XDocument englishContent = XDocument.Load(englishCardsFile.FullName);
+            
+            // Build lookup: Card ID -> English Name
+            var englishIds = new Dictionary<string, string>();
+            foreach (var elem in englishContent.Root.Elements("Card"))
             {
-                WriteLogMessage(turnWriter, message);
+                string id = elem.Element("CardId").Value;
+                string name = elem.Element("Name").Value;
+                englishIds[id] = name;
             }
-            else
+
+            // Build lookup: Native Name -> Card ID
+            var nativeNames = new Dictionary<string, string>();
+            foreach (var elem in nativeContent.Root.Elements("Card"))
             {
-                queuedLogMessages.Enqueue(message);
+                string name = elem.Element("Name").Value;
+                string id = elem.Element("CardId").Value;
+                nativeNames[name] = id;
             }
+
+            // Build lookup: Native Name -> English Name
+            nameTranslations = new Dictionary<string, string>();
+            foreach (var nativeName in nativeNames)
+            {
+                nameTranslations[nativeName.Key] = englishIds[nativeName.Value];
+            }
+
+            Log("Initialized " + nameTranslations.Count + " card name translations.");
         }
 
         private static void Log(String message)
@@ -544,8 +604,55 @@ namespace SmartBot.Plugins
             return "[" + DateTime.Now.ToString("HH:mm:ss") + "] ";
         }
 
+        private string TranslateCardNames(string message)
+        {
+            // Check if name translations need to be initialized or locale changed
+            if (nameTranslations == null || nameTranslationLocale != settings.Locale)
+            {
+                InitializeNameTranslations();
+            }
+
+            string addAction = "[DEBUG]BattleProcesser : AddAction()";
+            int addActionIndex = message.IndexOf(addAction);
+            if (addActionIndex != -1)
+            {
+                int i = message.IndexOf(" ", addActionIndex + addAction.Length);
+                if (i != -1)
+                {
+                    string action = message.Substring(i + 1);
+                    foreach (string card in action.Split(new string[] { "->" }, StringSplitOptions.None))
+                    {
+                        int openBracket = card.IndexOf("[");
+                        string nativeName = openBracket != -1 ? card.Substring(0, openBracket) : card;
+                        if (nativeName.Length > 0)
+                        {
+                            string englishName;
+                            if (nameTranslations.TryGetValue(nativeName, out englishName))
+                            {
+                                if (!nativeName.Equals(englishName))
+                                {
+                                    message = message.ReplaceFirst(nativeName, englishName);
+                                }
+                            }
+                            else
+                            {
+                                Log("Failed to find name translation for: " + nativeName);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return message;
+        }
+
         private void WriteLogMessage(StreamWriter writer, string message)
         {
+            if (settings.Locale != "enUS")
+            {
+                message = TranslateCardNames(message);
+            }
+
             if (settings.HidePersonalInfo)
             {
                 // Ignore auth logs
@@ -684,6 +791,20 @@ namespace SmartBot.Plugins
             }
 
             Log("Copied " + seedFiles.Length + " seed files");
+        }
+    }
+
+    public static class StringExtensionMethods
+    {
+        // Add extension method to string to replace only first occurrence
+        public static string ReplaceFirst(this string text, string search, string replace)
+        {
+            int pos = text.IndexOf(search);
+            if (pos < 0)
+            {
+                return text;
+            }
+            return text.Substring(0, pos) + replace + text.Substring(pos + search.Length);
         }
     }
 }
