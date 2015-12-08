@@ -9,8 +9,8 @@ Game Recorder is a plugin for [SmartBot](http://sb-forum.com/) (an intelligent H
 3. Start the bot and watch the ```RecordedGames``` folder in its root directory.
   * A new folder is created for each game (e.g. ```2015-12-05 163737 Rogue vs. Shaman```)
   * Screenshots are captured live throughout the game.
-  * Folder name is appended with ```WIN``` or ```LOSS``` (on victory or defeat).
   * Logs are saved for each turn (or when bot is stopped).
+  * Folder name is appended with ```WIN``` or ```LOSS``` when the game ends.
   * Seeds are copied when the game ends (or when bot is stopped).
 4. Review screenshots and log files to analyze what went wrong in games.
 5. Report any [AI misplays](http://sb-forum.com/index.php?/forum/31-smartcc-ai-misplay/) found by creating a new thread with relevant details.
@@ -28,7 +28,10 @@ Name|Description
 ---|---
 HidePersonalInfo|Enable this to gray out personal info in screenshots, and to remove timestamps and auth messages from logs (highly recommended).
 ImageFormat|Select the image format for saving screenshots.
-ImageQuality|Select the image quality (Jpeg format only).
+ImageQuality|Enter the image quality for saving screenshots (1-100).
+ImageResizeEnabled|Enable this to resize screenshots when saving.
+ImageResizeHeight|Enter the maximum screenshot height (in pixels).
+ImageResizeWidth|Enter the maximum screenshot width (in pixels).
 IncludeLogs|Enable this to generate turn-by-turn log files.
 IncludeMulligan|Enable this to copy mulligan output from [SmartMulligan](https://github.com/ArthurFairchild/MulliganProfiles/tree/SmartMulliganV2/MulliganProfiles) at start of turn.
 IncludeSeeds|Enable this to copy seed files at end of game (or when bot is stopped).
@@ -40,5 +43,6 @@ ScreenshotConcede|Whether to capture screeshot when conceding.
 ScreenshotDefeat|Whether to capture screenshot on defeat.
 ScreenshotEndTurn|Whether to capture screenshot at end of turn.
 ScreenshotLethal|Whether to capture screenshot when lethal is found.
+ScreenshotMulligan|Whether to capture screenshot of mulligan selections.
 ScreenshotResimulate|Whether to capture screenshot when bot resimulates.
 ScreenshotVictory|Whether to capture screenshot on victory.
