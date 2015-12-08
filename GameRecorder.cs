@@ -2,6 +2,7 @@ using SmartBot.Plugins.API;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -29,6 +30,9 @@ namespace SmartBot.Plugins
         [ItemsSource(typeof(ImageFormatItemsSource))]
         public string ImageFormat { get; set; }
         public int ImageQuality { get; set; }
+        public bool ImageResizeEnabled { get; set; }
+        public int ImageResizeHeight { get; set; }
+        public int ImageResizeWidth { get; set; }
 
         public bool IncludeLogs { get; set; }
         public bool IncludeMulligan { get; set; }
@@ -39,6 +43,7 @@ namespace SmartBot.Plugins
         public bool LogFriendRequests { get; set; }
         public bool LogWhispers { get; set; }
 
+        public bool ScreenshotMulligan { get; set; }
         public bool ScreenshotBeginTurn { get; set; }
         public bool ScreenshotEndTurn { get; set; }
         public bool ScreenshotChoice { get; set; }
@@ -53,12 +58,16 @@ namespace SmartBot.Plugins
             Name = "GameRecorder";
             this.ImageFormat = "Jpeg";
             ImageQuality = 50;
+            ImageResizeEnabled = false;
+            ImageResizeHeight = 600;
+            ImageResizeWidth = 800;
             IncludeLogs = true;
             IncludeMulligan = true;
             IncludeSeeds = true;
             HidePersonalInfo = true;
             LogFriendRequests = true;
             LogWhispers = true;
+            ScreenshotMulligan = true;
             ScreenshotBeginTurn = true;
             ScreenshotEndTurn = true;
             ScreenshotChoice = true;
@@ -103,10 +112,16 @@ namespace SmartBot.Plugins
 
         ~GameRecorderPlugin()
         {
+            Dispose();
+        }
+
+        public override void Dispose()
+        {
             if (turnWriter != null)
             {
                 turnWriter.Close();
-            }
+                turnWriter = null;
+            }            
         }
 
         public override void OnPluginCreated()
@@ -168,6 +183,19 @@ namespace SmartBot.Plugins
             SaveWhispers();
         }
 
+        public override void OnHandleMulligan(List<Card.Cards> choices, Card.CClass enemyClass, Card.CClass friendClass)
+        {
+            CreateGameFolder(friendClass, enemyClass);
+        }
+
+        public override void OnMulliganCardsReplaced(List<Card.Cards> replacedCards)
+        {
+            if (settings.ScreenshotMulligan)
+            {
+                TakeScreenshot("Mulligan");
+            }
+        }
+
         public override void OnActionExecute(API.Actions.Action action)
         {
             if (action is API.Actions.ChoiceAction && settings.ScreenshotChoice)
@@ -177,14 +205,6 @@ namespace SmartBot.Plugins
             else if (action is API.Actions.ConcedeAction && settings.ScreenshotConcede)
             {
                 TakeScreenshot("Concede");
-            }
-            else if (action is API.Actions.EndTurnAction && settings.ScreenshotEndTurn)
-            {
-                TakeScreenshot("EndTurn");
-                if (turnWriter != null)
-                {
-                    turnWriter.Flush();
-                }
             }
             else if (action is API.Actions.ResimulateAction && settings.ScreenshotResimulate)
             {
@@ -199,16 +219,8 @@ namespace SmartBot.Plugins
 
             if (!gameStarted)
             {
-                // Create folder for the new game
-                string dateTime = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
-                var board = API.Bot.CurrentBoard;
-                var friend = Capitalize(board.FriendClass.ToString());
-                var enemy = Capitalize(board.EnemyClass.ToString());
-                currentGameFolder = "RecordedGames\\" + dateTime + " " + friend + " vs. " + enemy;
-                Directory.CreateDirectory(currentGameFolder);
-                gameStarted = true;
-
-                SaveMulligan();
+                var board = API.Bot.CurrentBoard;                
+                CreateGameFolder(board.FriendClass, board.EnemyClass);
             }
 
             SetupTurnLogger();
@@ -216,6 +228,18 @@ namespace SmartBot.Plugins
             if (settings.ScreenshotBeginTurn)
             {
                 TakeScreenshot("BeginTurn");
+            }
+        }
+
+        public override void OnTurnEnd()
+        {
+            if (settings.ScreenshotEndTurn)
+            {
+                TakeScreenshot("EndTurn");
+                if (turnWriter != null)
+                {
+                    turnWriter.Flush();
+                }
             }
         }
 
@@ -229,7 +253,7 @@ namespace SmartBot.Plugins
 
         public override void OnVictory()
         {
-            if (settings.ScreenshotVictory && gameStarted)
+            if (settings.ScreenshotVictory)
             {
                 TakeScreenshot("Victory");
             }
@@ -239,7 +263,7 @@ namespace SmartBot.Plugins
 
         public override void OnDefeat()
         {
-            if (settings.ScreenshotDefeat && gameStarted)
+            if (settings.ScreenshotDefeat)
             {
                 TakeScreenshot("Defeat");
             }
@@ -249,7 +273,7 @@ namespace SmartBot.Plugins
 
         public override void OnConcede()
         {
-            if (settings.ScreenshotConcede && gameStarted)
+            if (settings.ScreenshotConcede)
             {
                 TakeScreenshot("Concede");
             }
@@ -293,6 +317,22 @@ namespace SmartBot.Plugins
             Bot.Log("[GameRecorder] " + message);
         }
 
+        private void CreateGameFolder(Card.CClass friendClass, Card.CClass enemyClass)
+        {
+            if (!gameStarted)
+            {
+                // Create folder for the new game
+                string dateTime = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
+                var friend = Capitalize(friendClass.ToString());
+                var enemy = Capitalize(enemyClass.ToString());
+                currentGameFolder = "RecordedGames\\" + dateTime + " " + friend + " vs. " + enemy;
+                Directory.CreateDirectory(currentGameFolder);
+                gameStarted = true;
+
+                SaveMulligan();
+            }
+        }
+
         private void SaveFriendRequests()
         {
             if (gameStarted && friendRequests.Count > 0)
@@ -330,8 +370,41 @@ namespace SmartBot.Plugins
             return str.Substring(0, 1).ToUpper() + str.Substring(1).ToLower();
         }
 
+        private Bitmap ResizeImage(Bitmap original, int newWidth, int newHeight)
+        {
+            Bitmap scaledImage = new Bitmap(newWidth, newHeight);
+            using (Graphics g = Graphics.FromImage(scaledImage))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.CompositingQuality = CompositingQuality.HighQuality;
+
+                // Draw the scaled image onto the canvas
+                g.DrawImage(original, 0, 0, newWidth, newHeight);
+            }
+
+            return scaledImage;
+        }
+
         private void OnScreenshotReceived(Bitmap image)
         {
+            if (!gameStarted)
+            {
+                return;
+            }
+
+            if (settings.ImageResizeEnabled &&
+                (image.Height > settings.ImageResizeHeight || image.Width > settings.ImageResizeWidth))
+            {
+                // Compute new width and height
+                int width = image.Width < settings.ImageResizeWidth ? image.Width : settings.ImageResizeWidth;
+                int height = image.Height < settings.ImageResizeHeight ? image.Height : settings.ImageResizeHeight;
+
+                // Resize the image
+                image = ResizeImage(image, width, height);
+            }
+
             using (Graphics g = Graphics.FromImage(image))
             {
                 if (settings.HidePersonalInfo)
@@ -342,9 +415,9 @@ namespace SmartBot.Plugins
                     int rectangleHeight = (int)(0.12 * image.Height);
 
                     Rectangle[] grayBoxes = new Rectangle[] {
-                        new Rectangle(1, 1, rectangleWidth, rectangleHeight),
-                        new Rectangle(1, (int)(0.8 * image.Height), rectangleWidth, rectangleHeight),
-                        new Rectangle(1, (int)(0.9 * image.Height), rectangleWidth, rectangleHeight)
+                        new Rectangle(0, 0, rectangleWidth, rectangleHeight),
+                        new Rectangle(0, (int)(0.8 * image.Height), rectangleWidth, rectangleHeight),
+                        new Rectangle(0, (int)(0.9 * image.Height), rectangleWidth, rectangleHeight)
                     };
 
                     g.FillRectangles(grayBrush, grayBoxes);
@@ -390,8 +463,11 @@ namespace SmartBot.Plugins
 
         private void TakeScreenshot(String action)
         {
-            screenshotAction = action;
-            GUI.RequestScreenshotToBitmap();
+            if (gameStarted)
+            {
+                screenshotAction = action;
+                GUI.RequestScreenshotToBitmap();
+            }
         }
 
         private void SetupTurnLogger()
