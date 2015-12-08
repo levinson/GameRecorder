@@ -348,7 +348,7 @@ namespace SmartBot.Plugins
                 string dateTime = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
                 var friend = Capitalize(friendClass.ToString());
                 var enemy = Capitalize(enemyClass.ToString());
-                currentGameFolder = "RecordedGames\\" + dateTime + " " + friend + " vs. " + enemy;
+                currentGameFolder = "RecordedGames\\" + dateTime + " " + API.Bot.CurrentMode() + " " + friend + " vs. " + enemy;
                 Directory.CreateDirectory(currentGameFolder);
                 gameStarted = true;
             }
@@ -391,7 +391,7 @@ namespace SmartBot.Plugins
             return str.Substring(0, 1).ToUpper() + str.Substring(1).ToLower();
         }
 
-        private Bitmap ResizeImage(Bitmap original, int newWidth, int newHeight)
+        private static Bitmap ResizeImage(Bitmap original, int newWidth, int newHeight)
         {
             Bitmap scaledImage = new Bitmap(newWidth, newHeight);
             using (Graphics g = Graphics.FromImage(scaledImage))
