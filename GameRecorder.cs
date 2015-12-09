@@ -138,15 +138,16 @@ namespace SmartBot.Plugins
 
         // Writer for current turn logging
         private StreamWriter turnWriter = null;
+        private string turnWriterPath = null;
 
         // Log messages received before first turn
-        private Queue<String> queuedLogMessages = new Queue<String>();
+        private Queue<string> queuedLogMessages = new Queue<string>();
 
         // Whispers received
-        private Queue<String> whispers = new Queue<String>();
+        private Queue<string> whispers = new Queue<string>();
 
         // Friend requests received
-        private Queue<String> friendRequests = new Queue<String>();
+        private Queue<string> friendRequests = new Queue<string>();
 
         // Stores action for next received screenshot
         private string screenshotAction = null;
@@ -191,6 +192,7 @@ namespace SmartBot.Plugins
             actionNum = 0;
             wonLastGame = false;
             turnWriter = null;
+            turnWriterPath = null;
             queuedLogMessages.Clear();
             whispers.Clear();
             friendRequests.Clear();
@@ -583,7 +585,14 @@ namespace SmartBot.Plugins
             string fileName = turnAndAction + " " + screenshotAction + "." + fileExtension;
 
             // Save with given format and quality
-            image.Save(currentGameFolder + "\\" + fileName, GetEncoder(format), encoderParams);
+            string filePath = currentGameFolder + "\\" + fileName;
+            image.Save(filePath, GetEncoder(format), encoderParams);
+
+            if (settings.HidePersonalInfo)
+            {
+                HideFileAccessTimes(filePath);
+            }
+
             Log("Saved screenshot: " + fileName);
 
             actionNum += 1;
@@ -630,22 +639,36 @@ namespace SmartBot.Plugins
             {
                 // Close the existing log file
                 turnWriter.Close();
+
+                HideFileAccessTimes(turnWriterPath);
             }
             else
             {
                 // Write queued log messages now
-                using (var writer = new StreamWriter(currentGameFolder + "\\BeginGame_Logs.txt"))
+                string filePath = currentGameFolder + "\\BeginGame_Logs.txt";
+                using (var writer = new StreamWriter(filePath))
                 {
                     foreach (string message in queuedLogMessages)
                     {
                         WriteLogMessage(writer, message);
                     }
                 }
+
+                HideFileAccessTimes(filePath);
             }
 
             // Setup new log file for this turn
-            string outputPath = currentGameFolder + "\\" + "Turn_" + turnNum + "_Logs.txt";
-            turnWriter = new StreamWriter(outputPath);
+            turnWriterPath = currentGameFolder + "\\" + "Turn_" + turnNum + "_Logs.txt";
+            turnWriter = new StreamWriter(turnWriterPath);
+        }
+
+        private static DateTime year2000 = new DateTime(2000, 1, 1);
+
+        private static void HideFileAccessTimes(string filePath)
+        {
+            File.SetCreationTime(filePath, year2000);
+            File.SetLastAccessTime(filePath, year2000);
+            File.SetLastWriteTime(filePath, year2000);
         }
 
         private string GetTimestampPrefix()
@@ -764,12 +787,19 @@ namespace SmartBot.Plugins
                 }
             }
 
-            using (StreamWriter writer = new StreamWriter(currentGameFolder + "\\SmartMulligan.txt"))
+            // Write last output from SmartMulligan to file
+            string mulliganFilePath = currentGameFolder + "\\SmartMulligan.txt";
+            using (StreamWriter writer = new StreamWriter(mulliganFilePath))
             {
                 foreach (string line in mulliganLogs)
                 {
                     writer.WriteLine(line);
                 }
+            }
+
+            if (settings.HidePersonalInfo)
+            {
+                HideFileAccessTimes(mulliganFilePath);
             }
 
             Log("Copied smart mulligan output");
@@ -836,7 +866,13 @@ namespace SmartBot.Plugins
             foreach (string fileName in seedFiles)
             {
                 FileInfo fileInfo = new FileInfo(fileName);
-                File.Copy(fileInfo.FullName, currentGameFolder + "\\" + fileInfo.Name, true);
+                string targetPath = currentGameFolder + "\\" + fileInfo.Name;
+                File.Copy(fileInfo.FullName, targetPath, true);
+
+                if (settings.HidePersonalInfo)
+                {
+                    HideFileAccessTimes(targetPath);
+                }
             }
 
             Log("Copied " + seedFiles.Length + " seed files");
