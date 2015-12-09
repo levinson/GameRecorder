@@ -40,11 +40,30 @@ namespace SmartBot.Plugins
         }
     }
 
+    public class GameModesSource : IItemsSource
+    {
+        public ItemCollection GetValues()
+        {
+            ItemCollection gameModes = new ItemCollection();
+            gameModes.Add("All");
+            gameModes.Add("Ranked");
+            gameModes.Add("Unranked");
+            gameModes.Add("Arena");
+            gameModes.Add("Arena & Ranked");
+            gameModes.Add("Arena & Unranked");
+            gameModes.Add("Ranked & Unranked");
+            return gameModes;
+        }
+    }
+
     [Serializable]
     public class GameRecorderSettings : PluginDataContainer
     {
         [ItemsSource(typeof(LocaleItemsSource))]
         public string Locale { get; set; }
+
+        [ItemsSource(typeof(GameModesSource))]
+        public string GameModes { get; set; }
 
         [ItemsSource(typeof(ImageFormatItemsSource))]
         public string ImageFormat { get; set; }
@@ -78,6 +97,7 @@ namespace SmartBot.Plugins
         {
             Name = "GameRecorder";
             Locale = "enUS";
+            GameModes = "All";
             this.ImageFormat = "Jpeg";
             ImageQuality = 50;
             ImageResizeEnabled = false;
@@ -234,7 +254,10 @@ namespace SmartBot.Plugins
                 EndGame();
             }
 
-            CreateGameFolder(friendClass, enemyClass);
+            if (IsCurrentGameModeSelected())
+            {
+                CreateGameFolder(friendClass, enemyClass);
+            }
 
             if (settings.ScreenshotMulligan)
             {
@@ -273,7 +296,7 @@ namespace SmartBot.Plugins
             turnNum += 1;
             actionNum = 0;
 
-            if (!gameStarted)
+            if (!gameStarted && IsCurrentGameModeSelected())
             {
                 var board = API.Bot.CurrentBoard;                
                 CreateGameFolder(board.FriendClass, board.EnemyClass);
@@ -378,9 +401,8 @@ namespace SmartBot.Plugins
 
         private void InitializeNameTranslations()
         {
-            nameTranslationLocale = settings.Locale;
-            var englishCardsFile = new FileInfo("CardDatabase\\cardDB." + nameTranslationLocale + ".xml");
-            var nativeCardsFile = new FileInfo("CardDatabase\\cardDB." + nameTranslationLocale + ".xml");
+            var englishCardsFile = new FileInfo("CardDatabase\\cardDB.enUS.xml");
+            var nativeCardsFile = new FileInfo("CardDatabase\\cardDB." + settings.Locale + ".xml");
 
             if (!englishCardsFile.Exists || !nativeCardsFile.Exists)
             {
@@ -411,10 +433,13 @@ namespace SmartBot.Plugins
 
             // Build lookup: Native Name -> English Name
             nameTranslations = new Dictionary<string, string>();
+
             foreach (var nativeName in nativeNames)
             {
                 nameTranslations[nativeName.Key] = englishIds[nativeName.Value];
             }
+
+            nameTranslationLocale = settings.Locale;
 
             Log("Initialized " + nameTranslations.Count + " card name translations.");
         }
@@ -424,18 +449,37 @@ namespace SmartBot.Plugins
             Bot.Log("[GameRecorder] " + message);
         }
 
+        private bool IsCurrentGameModeSelected()
+        {
+            if (settings.GameModes.Equals("All"))
+            {
+                return true;
+            }
+
+            // Check game mode
+            switch (Bot.CurrentMode())
+            {
+                case Bot.Mode.Arena:
+                case Bot.Mode.ArenaAuto:
+                    return settings.GameModes.Contains("Arena");
+                case Bot.Mode.Ranked:
+                    return settings.GameModes.Contains("Ranked");
+                case  Bot.Mode.Unranked:
+                    return settings.GameModes.Contains("Unranked");
+                default:
+                    return false;
+            }
+        }
+
         private void CreateGameFolder(Card.CClass friendClass, Card.CClass enemyClass)
         {
-            if (!gameStarted)
-            {
-                // Create folder for the new game
-                string dateTime = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
-                var friend = Capitalize(friendClass.ToString());
-                var enemy = Capitalize(enemyClass.ToString());
-                currentGameFolder = "RecordedGames\\" + dateTime + " " + API.Bot.CurrentMode() + " " + friend + " vs. " + enemy;
-                Directory.CreateDirectory(currentGameFolder);
-                gameStarted = true;
-            }
+            // Create folder for the new game
+            string dateTime = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
+            var friend = Capitalize(friendClass.ToString());
+            var enemy = Capitalize(enemyClass.ToString());
+            currentGameFolder = "RecordedGames\\" + dateTime + " " + API.Bot.CurrentMode() + " " + friend + " vs. " + enemy;
+            Directory.CreateDirectory(currentGameFolder);
+            gameStarted = true;
         }
 
         private void SaveFriendRequests()
@@ -577,7 +621,7 @@ namespace SmartBot.Plugins
 
         private void SetupTurnLogger()
         {
-            if (!settings.IncludeLogs)
+            if (!settings.IncludeLogs || !gameStarted)
             {
                 return;
             }
@@ -674,7 +718,7 @@ namespace SmartBot.Plugins
 
         private void SaveMulligan()
         {
-            if (!settings.IncludeMulligan)
+            if (!settings.IncludeMulligan || !gameStarted)
             {
                 return;
             }
