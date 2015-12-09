@@ -235,6 +235,11 @@ namespace SmartBot.Plugins
             }
 
             CreateGameFolder(friendClass, enemyClass);
+
+            if (settings.ScreenshotMulligan)
+            {
+                TakeScreenshot("Mulligan");
+            }
         }
 
         public override void OnMulliganCardsReplaced(List<Card.Cards> replacedCards)
