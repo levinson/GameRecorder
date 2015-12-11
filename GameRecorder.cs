@@ -124,6 +124,9 @@ namespace SmartBot.Plugins
 
     public class GameRecorderPlugin : Plugin
     {
+        // Top-level folder where all output is saved
+        private readonly string baseFolder = "RecordedGames";
+
         // Folder to save screenshots for current game
         private string currentGameFolder = null;
 
@@ -143,11 +146,9 @@ namespace SmartBot.Plugins
         // Log messages received before first turn
         private Queue<string> queuedLogMessages = new Queue<string>();
 
-        // Whispers received
-        private Queue<string> whispers = new Queue<string>();
-
-        // Friend requests received
-        private Queue<string> friendRequests = new Queue<string>();
+        // Writers for whispers and friend requests received
+        private StreamWriter whisperWriter = null;
+        private StreamWriter friendRequestWriter = null;
 
         // Stores action for next received screenshot
         private string screenshotAction = null;
@@ -169,6 +170,19 @@ namespace SmartBot.Plugins
             {
                 turnWriter.Close();
                 turnWriter = null;
+                HideFileAccessTimes(turnWriterPath);
+            }
+
+            if (whisperWriter != null)
+            {
+                whisperWriter.Close();
+                whisperWriter = null;
+            }
+
+            if (friendRequestWriter != null)
+            {
+                friendRequestWriter.Close();
+                friendRequestWriter = null;
             }
 
             // Unregister event handlers
@@ -194,8 +208,6 @@ namespace SmartBot.Plugins
             turnWriter = null;
             turnWriterPath = null;
             queuedLogMessages.Clear();
-            whispers.Clear();
-            friendRequests.Clear();
             screenshotAction = null;
         }
 
@@ -213,8 +225,6 @@ namespace SmartBot.Plugins
             }
 
             CopySeeds();
-            SaveFriendRequests();
-            SaveWhispers();
 
             if (gameStarted)
             {
@@ -242,10 +252,6 @@ namespace SmartBot.Plugins
 
             // Overwritten when game ends
             CopySeeds();
-
-            // Appended at end of game
-            SaveFriendRequests();
-            SaveWhispers();
         }
 
         public override void OnHandleMulligan(List<Card.Cards> choices, Card.CClass enemyClass, Card.CClass friendClass)
@@ -364,7 +370,12 @@ namespace SmartBot.Plugins
         {
             if (settings.LogWhispers)
             {
-                whispers.Enqueue(GetTimestampPrefix() + friend.GetName() + " says " + message);
+                if (whisperWriter == null)
+                {
+                    whisperWriter = new StreamWriter(baseFolder + "\\Whispers.txt", true);
+                }
+                whisperWriter.WriteLine(GetTimestampPrefix() + friend.GetName() + " says " + message);
+                whisperWriter.Flush();
             }
         }
 
@@ -372,7 +383,12 @@ namespace SmartBot.Plugins
         {
             if (settings.LogFriendRequests)
             {
-                friendRequests.Enqueue(GetTimestampPrefix() + request.GetPlayerName());
+                if (friendRequestWriter == null)
+                {
+                    friendRequestWriter = new StreamWriter(baseFolder + "\\FriendRequests.txt", true);
+                }
+                friendRequestWriter.WriteLine(GetTimestampPrefix() + request.GetPlayerName());
+                friendRequestWriter.Flush();
             }
         }
 
@@ -479,41 +495,9 @@ namespace SmartBot.Plugins
             string dateTime = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
             var friend = Capitalize(friendClass.ToString());
             var enemy = Capitalize(enemyClass.ToString());
-            currentGameFolder = "RecordedGames\\" + dateTime + " " + API.Bot.CurrentMode() + " " + friend + " vs. " + enemy;
+            currentGameFolder = baseFolder + "\\" + dateTime + " " + API.Bot.CurrentMode() + " " + friend + " vs. " + enemy;
             Directory.CreateDirectory(currentGameFolder);
             gameStarted = true;
-        }
-
-        private void SaveFriendRequests()
-        {
-            if (gameStarted && friendRequests.Count > 0)
-            {
-                using (var writer = new StreamWriter(currentGameFolder + "\\FriendRequests.txt", true))
-                {
-                    foreach (string request in friendRequests)
-                    {
-                        writer.WriteLine(request);
-                    }
-                }
-
-                friendRequests.Clear();
-            }
-        }
-
-        private void SaveWhispers()
-        {
-            if (gameStarted && whispers.Count > 0)
-            {
-                using (var writer = new StreamWriter(currentGameFolder + "\\Whispers.txt", true))
-                {
-                    foreach (string whisper in whispers)
-                    {
-                        writer.WriteLine(whisper);
-                    }
-                }
-
-                whispers.Clear();
-            }
         }
 
         private string Capitalize(String str)
