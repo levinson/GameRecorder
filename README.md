@@ -41,6 +41,7 @@ IncludeSeeds|Enable this to copy seed files at end of game (or when bot is stopp
 Locale|Set the locale of your game client to translate card names to English in log files.
 LogFriendRequests|Enable this to log friend requests.
 LogWhispers|Enable this to log received whispers.
+MisplayHotkey|Select the hotkey for creating misplay reports. Changing this setting requires reload.
 ScreenshotBeginTurn|Whether to capture screenshot at beginning of turn.
 ScreenshotChoice|Whether to capture screenshot of choice events (e.g. Discover).
 ScreenshotConcede|Whether to capture screeshot when conceding.
