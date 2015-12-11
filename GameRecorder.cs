@@ -93,6 +93,7 @@ namespace SmartBot.Plugins
             hotkeys.Add(CONTROL_M);
             hotkeys.Add(CONTROL_ALT_M);
             hotkeys.Add(CONTROL_SHIFT_M);
+            hotkeys.Add(NONE);
             return hotkeys;
         }
     }
@@ -1030,6 +1031,11 @@ namespace SmartBot.Plugins
         private void OnHotkeyPressed(object sender, KeyPressedEventArgs e)
         {
             // Currently there is only one hotkey -- so assume event is for misplay
+
+            if (!settings.Enabled)
+            {
+                return;
+            }
 
             if (!gameStarted)
             {
