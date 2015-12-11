@@ -6,7 +6,9 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 using System.Xml.Linq;
 using Xceed.Wpf.Toolkit.PropertyGrid.Attributes;
 
@@ -59,12 +61,12 @@ namespace SmartBot.Plugins
 
     public class DeleteGamesSource : IItemsSource
     {
-        public static readonly string NEVER = "Never";
-        public static readonly string ONE_DAY = "After one day";
-        public static readonly string TWO_DAYS = "After two days";
-        public static readonly string ONE_WEEK = "After one week";
-        public static readonly string TWO_WEEKS = "After two weeks";
-        public static readonly string ONE_MONTH = "After one month";
+        public const string NEVER = "Never";
+        public const string ONE_DAY = "After one day";
+        public const string TWO_DAYS = "After two days";
+        public const string ONE_WEEK = "After one week";
+        public const string TWO_WEEKS = "After two weeks";
+        public const string ONE_MONTH = "After one month";
 
         public ItemCollection GetValues()
         {
@@ -76,6 +78,22 @@ namespace SmartBot.Plugins
             expireGamesAfter.Add(TWO_WEEKS);
             expireGamesAfter.Add(ONE_MONTH);
             return expireGamesAfter;
+        }
+    }
+
+    public class MisplayHotkeySource : IItemsSource
+    {
+        public const string CONTROL_M = "Ctrl+M";
+        public const string CONTROL_ALT_M = "Ctrl+Alt+M";
+        public const string CONTROL_SHIFT_M = "Ctrl+Shift+M";
+        public const string NONE = "None";
+        public ItemCollection GetValues()
+        {
+            ItemCollection hotkeys = new ItemCollection();
+            hotkeys.Add(CONTROL_M);
+            hotkeys.Add(CONTROL_ALT_M);
+            hotkeys.Add(CONTROL_SHIFT_M);
+            return hotkeys;
         }
     }
 
@@ -119,6 +137,9 @@ namespace SmartBot.Plugins
         [ItemsSource(typeof(DeleteGamesSource))]
         public string DeleteGames { get; set; }
 
+        [ItemsSource(typeof(MisplayHotkeySource))]
+        public string MisplayHotkey { get; set; }
+
         public GameRecorderSettings()
         {
             Name = "GameRecorder";
@@ -146,13 +167,14 @@ namespace SmartBot.Plugins
             ScreenshotDefeat = true;
             DeleteWins = false;
             DeleteGames = DeleteGamesSource.NEVER;
+            MisplayHotkey = MisplayHotkeySource.CONTROL_M;
         }
     }
 
     public class GameRecorderPlugin : Plugin
     {
         // Top-level folder where all output is saved
-        private readonly string baseFolder = "RecordedGames";
+        private const string baseFolder = "RecordedGames";
 
         // Folder to save screenshots for current game
         private string currentGameFolder = null;
@@ -186,7 +208,14 @@ namespace SmartBot.Plugins
         private Dictionary<string, string> nameTranslations = null;
         private string nameTranslationLocale = null;
 
+        // Keep track of enemy and friend classes
         private Card.CClass enemyClass = Card.CClass.NONE;
+        private Card.CClass friendClass = Card.CClass.NONE;
+
+        // Used for hotkeys
+        private KeyboardHook hook = new KeyboardHook();
+
+        private bool misplayThisTurn = false;
 
         ~GameRecorderPlugin()
         {
@@ -217,6 +246,13 @@ namespace SmartBot.Plugins
             // Unregister event handlers
             Debug.OnLogReceived -= OnLogReceived;
             GUI.OnScreenshotReceived -= OnScreenshotReceived;
+
+            // Unregister hotkeys
+            if (hook != null)
+            {
+                hook.Dispose();
+                hook = null;
+            }
         }
 
         public override void OnPluginCreated()
@@ -224,6 +260,8 @@ namespace SmartBot.Plugins
             settings = (GameRecorderSettings)DataContainer;
             Debug.OnLogReceived += OnLogReceived;
             GUI.OnScreenshotReceived += OnScreenshotReceived;
+
+            RegisterHotkeys();
         }
 
         private void Reset()
@@ -239,6 +277,8 @@ namespace SmartBot.Plugins
             queuedLogMessages.Clear();
             screenshotAction = null;
             enemyClass = Card.CClass.NONE;
+            friendClass = Card.CClass.NONE;
+            misplayThisTurn = false;
         }
 
         public override void OnGameEnd()
@@ -255,6 +295,11 @@ namespace SmartBot.Plugins
             }
 
             CopySeeds();
+
+            if (misplayThisTurn)
+            {
+                CreateMisplayReport();
+            }
 
             if (gameStarted)
             {
@@ -408,10 +453,18 @@ namespace SmartBot.Plugins
             if (settings.ScreenshotEndTurn)
             {
                 TakeScreenshot("EndTurn");
-                if (turnWriter != null)
-                {
-                    turnWriter.Flush();
-                }
+            }
+
+            if (turnWriter != null)
+            {
+                turnWriter.Flush();
+            }
+            
+            if (misplayThisTurn)
+            {
+                CopySeeds();
+                CreateMisplayReport();
+                misplayThisTurn = false;
             }
         }
 
@@ -579,6 +632,7 @@ namespace SmartBot.Plugins
         private void CreateGameFolder(Card.CClass friendClass, Card.CClass enemyClass)
         {
             this.enemyClass = enemyClass;
+            this.friendClass = friendClass;
 
             // Create folder for the new game
             string dateTime = DateTime.Now.ToString(dateFormat);
@@ -929,13 +983,6 @@ namespace SmartBot.Plugins
                 }
             }
 
-            // Check if number of turns found is reasonable
-            if (turns.Count > this.turnNum)
-            {
-                Log("No seeds yet for this game");
-                return;
-            }
-
             // Copy the seeds to the recorded games directory
             foreach (string fileName in seedFiles)
             {
@@ -951,6 +998,99 @@ namespace SmartBot.Plugins
 
             Log("Copied " + seedFiles.Length + " seed files");
         }
+
+        private void RegisterHotkeys()
+        {
+            if (!settings.MisplayHotkey.Equals(MisplayHotkeySource.NONE))
+            {
+                // register the event that is fired after the key press.
+                hook.KeyPressed += new EventHandler<KeyPressedEventArgs>(OnHotkeyPressed);
+
+                // register the control + alt + F12 combination as hot key.
+                switch (settings.MisplayHotkey)
+                {
+                    case MisplayHotkeySource.CONTROL_M:
+                        hook.RegisterHotKey(ModifierKeys.Control, Keys.M);
+                        break;
+                    case MisplayHotkeySource.CONTROL_ALT_M:
+                        hook.RegisterHotKey(ModifierKeys.Control | ModifierKeys.Alt, Keys.M);
+                        break;
+                    case MisplayHotkeySource.CONTROL_SHIFT_M:
+                        hook.RegisterHotKey(ModifierKeys.Control | ModifierKeys.Shift, Keys.M);
+                        break;
+                    default:
+                        Log("Invalid misplay hotkey: " + settings.MisplayHotkey);
+                        return;
+                }
+
+                Log("Registered misplay hotkey: " + settings.MisplayHotkey);
+            }
+        }
+
+        private void OnHotkeyPressed(object sender, KeyPressedEventArgs e)
+        {
+            // Currently there is only one hotkey -- so assume event is for misplay
+
+            if (!gameStarted)
+            {
+                Log("Cannot record misplay before game started.");
+                return;
+            }
+
+            if (turnNum == 0)
+            {
+                // Misplay during mulligan -- record it right away
+                CreateMisplayReport();
+            }
+            else
+            {
+                misplayThisTurn = true;
+                TakeScreenshot("Misplay");
+                Log("Misplay noted - report will be created at end of turn.");
+            }
+        }
+
+        private void CreateMisplayReport()
+        {
+            // Create folder for the misplay
+            string dateTime = DateTime.Now.ToString(dateFormat);
+            var friend = Capitalize(friendClass.ToString());
+            var enemy = Capitalize(enemyClass.ToString());
+            string misplayFolder = "Misplays\\" + dateTime + " " + API.Bot.CurrentMode() + " " + friend + " vs. " + enemy;
+            Directory.CreateDirectory(misplayFolder);
+
+            if (turnWriter != null)
+            {
+                turnWriter.Flush();
+            }
+
+            string screenshotPrefix = turnNum.ToString("D2") + "-";
+            string logfilePrefix = "Turn_" + turnNum + "_";
+
+            // Copy relevant misplay media
+            foreach (string filePath in Directory.GetFiles(currentGameFolder))
+            {
+                var info = new FileInfo(filePath);
+
+                // Copy files for current turn
+                if (info.Name.StartsWith(screenshotPrefix) || info.Name.StartsWith(logfilePrefix))
+                {
+                    string targetPath = misplayFolder + "\\" + info.Name;
+                    File.Copy(filePath, targetPath);
+                    if (settings.HidePersonalInfo && info.Name.Contains("Logs"))
+                    {
+                        HideFileAccessTimes(targetPath);
+                    }
+                }
+            }
+
+            if (turnNum == 0)
+            {
+                File.Copy(currentGameFolder + "\\SmartMulligan.txt", misplayFolder + "\\SmartMulligan.txt");
+            }
+
+            Log("Created misplay report: " + misplayFolder);
+        }
     }
 
     public static class StringExtensionMethods
@@ -965,5 +1105,147 @@ namespace SmartBot.Plugins
             }
             return text.Substring(0, pos) + replace + text.Substring(pos + search.Length);
         }
+    }
+
+    public sealed class KeyboardHook : IDisposable
+    {
+        // Registers a hot key with Windows.
+        [DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+        // Unregisters the hot key with Windows.
+        [DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+        /// <summary>
+        /// Represents the window that is used internally to get the messages.
+        /// </summary>
+        private class Window : NativeWindow, IDisposable
+        {
+            private static int WM_HOTKEY = 0x0312;
+
+            public Window()
+            {
+                // create the handle for the window.
+                this.CreateHandle(new CreateParams());
+            }
+
+            /// <summary>
+            /// Overridden to get the notifications.
+            /// </summary>
+            /// <param name="m"></param>
+            protected override void WndProc(ref Message m)
+            {
+                base.WndProc(ref m);
+
+                // check if we got a hot key pressed.
+                if (m.Msg == WM_HOTKEY)
+                {
+                    // get the keys.
+                    Keys key = (Keys)(((int)m.LParam >> 16) & 0xFFFF);
+                    ModifierKeys modifier = (ModifierKeys)((int)m.LParam & 0xFFFF);
+
+                    // invoke the event to notify the parent.
+                    if (KeyPressed != null)
+                        KeyPressed(this, new KeyPressedEventArgs(modifier, key));
+                }
+            }
+
+            public event EventHandler<KeyPressedEventArgs> KeyPressed;
+
+            #region IDisposable Members
+
+            public void Dispose()
+            {
+                this.DestroyHandle();
+            }
+
+            #endregion
+        }
+
+        private Window _window = new Window();
+        private int _currentId;
+
+        public KeyboardHook()
+        {
+            // register the event of the inner native window.
+            _window.KeyPressed += delegate (object sender, KeyPressedEventArgs args)
+            {
+                if (KeyPressed != null)
+                    KeyPressed(this, args);
+            };
+        }
+
+        /// <summary>
+        /// Registers a hot key in the system.
+        /// </summary>
+        /// <param name="modifier">The modifiers that are associated with the hot key.</param>
+        /// <param name="key">The key itself that is associated with the hot key.</param>
+        public void RegisterHotKey(ModifierKeys modifier, Keys key)
+        {
+            // increment the counter.
+            _currentId = _currentId + 1;
+
+            // register the hot key.
+            if (!RegisterHotKey(_window.Handle, _currentId, (uint)modifier, (uint)key))
+                throw new InvalidOperationException("Couldn’t register the hot key.");
+        }
+
+        /// <summary>
+        /// A hot key has been pressed.
+        /// </summary>
+        public event EventHandler<KeyPressedEventArgs> KeyPressed;
+
+        #region IDisposable Members
+
+        public void Dispose()
+        {
+            // unregister all the registered hot keys.
+            for (int i = _currentId; i > 0; i--)
+            {
+                UnregisterHotKey(_window.Handle, i);
+            }
+
+            // dispose the inner native window.
+            _window.Dispose();
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    /// Event Args for the event that is fired after the hot key has been pressed.
+    /// </summary>
+    public class KeyPressedEventArgs : EventArgs
+    {
+        private ModifierKeys _modifier;
+        private Keys _key;
+
+        internal KeyPressedEventArgs(ModifierKeys modifier, Keys key)
+        {
+            _modifier = modifier;
+            _key = key;
+        }
+
+        public ModifierKeys Modifier
+        {
+            get { return _modifier; }
+        }
+
+        public Keys Key
+        {
+            get { return _key; }
+        }
+    }
+
+    /// <summary>
+    /// The enumeration of possible modifiers.
+    /// </summary>
+    [Flags]
+    public enum ModifierKeys : uint
+    {
+        Alt = 1,
+        Control = 2,
+        Shift = 4,
+        Win = 8
     }
 }
