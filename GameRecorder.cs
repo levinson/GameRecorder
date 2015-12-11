@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -56,6 +57,28 @@ namespace SmartBot.Plugins
         }
     }
 
+    public class DeleteGamesSource : IItemsSource
+    {
+        public static readonly string NEVER = "Never";
+        public static readonly string ONE_DAY = "After one day";
+        public static readonly string TWO_DAYS = "After two days";
+        public static readonly string ONE_WEEK = "After one week";
+        public static readonly string TWO_WEEKS = "After two weeks";
+        public static readonly string ONE_MONTH = "After one month";
+
+        public ItemCollection GetValues()
+        {
+            ItemCollection expireGamesAfter = new ItemCollection();
+            expireGamesAfter.Add(NEVER);
+            expireGamesAfter.Add(ONE_DAY);
+            expireGamesAfter.Add(TWO_DAYS);
+            expireGamesAfter.Add(ONE_WEEK);
+            expireGamesAfter.Add(TWO_WEEKS);
+            expireGamesAfter.Add(ONE_MONTH);
+            return expireGamesAfter;
+        }
+    }
+
     [Serializable]
     public class GameRecorderSettings : PluginDataContainer
     {
@@ -93,6 +116,9 @@ namespace SmartBot.Plugins
 
         public bool DeleteWins { get; set; }
 
+        [ItemsSource(typeof(DeleteGamesSource))]
+        public string DeleteGames { get; set; }
+
         public GameRecorderSettings()
         {
             Name = "GameRecorder";
@@ -119,6 +145,7 @@ namespace SmartBot.Plugins
             ScreenshotVictory = true;
             ScreenshotDefeat = true;
             DeleteWins = false;
+            DeleteGames = DeleteGamesSource.NEVER;
         }
     }
 
@@ -241,9 +268,64 @@ namespace SmartBot.Plugins
                     string newGameFolder = currentGameFolder + suffix;
                     Directory.Move(currentGameFolder, newGameFolder);
                 }
+
+                DeleteOldGames();
             }
 
             Reset();
+        }
+
+        private void DeleteOldGames()
+        {
+            DateTime cutoffDate = DateTime.Now;
+            if (settings.DeleteGames.Equals(DeleteGamesSource.ONE_DAY))
+            {
+                cutoffDate = cutoffDate.AddDays(-1);
+            }
+            else if (settings.DeleteGames.Equals(DeleteGamesSource.TWO_DAYS))
+            {
+                cutoffDate = cutoffDate.AddDays(-2);
+            }
+            else if (settings.DeleteGames.Equals(DeleteGamesSource.ONE_WEEK))
+            {
+                cutoffDate = cutoffDate.AddDays(-7);
+            }
+            else if (settings.DeleteGames.Equals(DeleteGamesSource.TWO_WEEKS))
+            {
+                cutoffDate = cutoffDate.AddDays(-14);
+            }
+            else if (settings.DeleteGames.Equals(DeleteGamesSource.ONE_MONTH))
+            {
+                cutoffDate = cutoffDate.AddDays(-31);
+            }
+            else
+            {
+                return;
+            }
+
+            foreach (string path in Directory.GetDirectories(baseFolder))
+            {
+                var gameFolder = new DirectoryInfo(path);
+                if (gameFolder.Name.Length > dateFormat.Length &&
+                    gameFolder.LastWriteTime.CompareTo(cutoffDate) < 0)
+                {
+                    // Check that folder name starts with date format
+                    DateTime result;
+                    if (DateTime.TryParseExact(gameFolder.Name.Substring(0, dateFormat.Length),
+                        dateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out result))
+                    {
+                        try
+                        {
+                            Directory.Delete(path, true);
+                            Log("Deleted old game: " + gameFolder.Name);
+                        }
+                        catch (Exception e)
+                        {
+                            Log("Failed to delete old game folder '" + gameFolder.Name + "' due to '" + e.Message);
+                        }
+                    }
+                }
+            }
         }
 
         public override void OnStopped()
@@ -492,12 +574,14 @@ namespace SmartBot.Plugins
             }
         }
 
+        private static readonly string dateFormat = "yyyy-MM-dd HHmmss";
+
         private void CreateGameFolder(Card.CClass friendClass, Card.CClass enemyClass)
         {
             this.enemyClass = enemyClass;
 
             // Create folder for the new game
-            string dateTime = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
+            string dateTime = DateTime.Now.ToString(dateFormat);
             var friend = Capitalize(friendClass.ToString());
             var enemy = Capitalize(enemyClass.ToString());
             currentGameFolder = baseFolder + "\\" + dateTime + " " + API.Bot.CurrentMode() + " " + friend + " vs. " + enemy;
