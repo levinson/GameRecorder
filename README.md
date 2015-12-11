@@ -39,8 +39,8 @@ IncludeLogs|Enable this to generate turn-by-turn log files.
 IncludeMulligan|Enable this to copy mulligan output from [SmartMulligan](https://github.com/ArthurFairchild/MulliganProfiles/tree/SmartMulliganV2/MulliganProfiles) at start of turn.
 IncludeSeeds|Enable this to copy seed files at end of game (or when bot is stopped).
 Locale|Set the locale of your game client to translate card names to English in log files.
-LogFriendRequests|Enable this to log friend requests after each game (or when bot is stopped).
-LogWhispers|Enable this to log received whispers after each game (or when bot is stopped).
+LogFriendRequests|Enable this to log friend requests.
+LogWhispers|Enable this to log received whispers.
 ScreenshotBeginTurn|Whether to capture screenshot at beginning of turn.
 ScreenshotChoice|Whether to capture screenshot of choice events (e.g. Discover).
 ScreenshotConcede|Whether to capture screeshot when conceding.
