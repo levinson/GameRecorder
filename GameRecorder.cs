@@ -159,6 +159,8 @@ namespace SmartBot.Plugins
         private Dictionary<string, string> nameTranslations = null;
         private string nameTranslationLocale = null;
 
+        private Card.CClass enemyClass = Card.CClass.NONE;
+
         ~GameRecorderPlugin()
         {
             Dispose();
@@ -209,6 +211,7 @@ namespace SmartBot.Plugins
             turnWriterPath = null;
             queuedLogMessages.Clear();
             screenshotAction = null;
+            enemyClass = Card.CClass.NONE;
         }
 
         public override void OnGameEnd()
@@ -491,6 +494,8 @@ namespace SmartBot.Plugins
 
         private void CreateGameFolder(Card.CClass friendClass, Card.CClass enemyClass)
         {
+            this.enemyClass = enemyClass;
+
             // Create folder for the new game
             string dateTime = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
             var friend = Capitalize(friendClass.ToString());
@@ -733,7 +738,8 @@ namespace SmartBot.Plugins
             // Find the most recent SmartMulligan log file
             DateTime mostRecentTime = new DateTime(1900, 1, 1);
             string currentMulliganFile = null;
-            foreach (string fileName in Directory.GetFiles("MulliganProfiles\\MulliganArchives"))
+            string path = "MulliganProfiles\\MulliganArchives\\" + Bot.CurrentMode() + "_VS_" + enemyClass;
+            foreach (string fileName in Directory.GetFiles(path))
             {
                 FileInfo fileInfo = new FileInfo(fileName);
                 DateTime modified = fileInfo.LastWriteTime;
