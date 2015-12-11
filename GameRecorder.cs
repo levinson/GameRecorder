@@ -431,6 +431,13 @@ namespace SmartBot.Plugins
 
         public override void OnTurnBegin()
         {
+            if (misplayThisTurn)
+            {
+                CopySeeds();
+                CreateMisplayReport();
+                misplayThisTurn = false;
+            }
+
             turnNum += 1;
             actionNum = 0;
 
@@ -458,13 +465,6 @@ namespace SmartBot.Plugins
             if (turnWriter != null)
             {
                 turnWriter.Flush();
-            }
-            
-            if (misplayThisTurn)
-            {
-                CopySeeds();
-                CreateMisplayReport();
-                misplayThisTurn = false;
             }
         }
 
@@ -1037,17 +1037,9 @@ namespace SmartBot.Plugins
                 return;
             }
 
-            if (turnNum == 0)
-            {
-                // Misplay during mulligan -- record it right away
-                CreateMisplayReport();
-            }
-            else
-            {
-                misplayThisTurn = true;
-                TakeScreenshot("Misplay");
-                Log("Misplay noted - report will be created at end of turn.");
-            }
+            misplayThisTurn = true;
+            TakeScreenshot("Misplay");
+            Log("Misplay noted - report will be created shortly.");
         }
 
         private void CreateMisplayReport()
