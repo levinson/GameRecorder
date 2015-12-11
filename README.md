@@ -13,8 +13,8 @@ Game Recorder is a plugin for [SmartBot](http://sb-forum.com/) (an intelligent H
   * Folder name is appended with ```WIN``` or ```LOSS``` when the game ends.
   * Seeds are copied when the game ends (or when bot is stopped).
 4. Review screenshots and log files to analyze what went wrong in games.
-5. Report any [AI misplays](http://sb-forum.com/index.php?/forum/31-smartcc-ai-misplay/) found by creating a new thread with relevant details.
-  * Include misplay and media only for a single turn.
+5. Report misplays by pressing the misplay hotkey, and then creating a new misplay report on the forums.
+  * Include all the files in the generated misplay report folder.
   * Explain what the bot did and what you expected it to do.
   * Justify why the bot should have made the alternate play.
 
