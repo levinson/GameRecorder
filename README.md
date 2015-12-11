@@ -26,6 +26,7 @@ Here are the meanings behind the many configuration parameters:
 
 Name|Description
 ---|---
+DeleteGames|Select when to delete old recorded games.
 DeleteWins|Enable this to delete recorded games that end in a win.
 GameModes|Select the game modes to record.
 HidePersonalInfo|Enable this to gray out personal info in screenshots, remove timestamps and auth messages from logs, and mask file modification times (highly recommended).
