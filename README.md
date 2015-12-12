@@ -45,7 +45,7 @@ ImageResizeEnabled|Enable this to resize screenshots when saving.
 ImageResizeHeight|Enter the maximum screenshot height (in pixels).
 ImageResizeWidth|Enter the maximum screenshot width (in pixels).
 IncludeLogs|Enable this to generate turn-by-turn log files.
-IncludeMulligan|Enable this to copy mulligan output from [SmartMulligan](https://github.com/ArthurFairchild/MulliganProfiles/tree/SmartMulliganV2/MulliganProfiles) at start of turn.
+IncludeMulligan|Enable this to copy mulligan output from [SmartMulligan](http://sb-forum.com/index.php?/topic/5930-requestfeedback-smartmulligan/) at start of turn.
 IncludeSeeds|Enable this to copy seed files at end of game (or when bot is stopped).
 Locale|Set the locale of your game client to translate card names to English in log files.
 LogFriendRequests|Enable this to log friend requests.
