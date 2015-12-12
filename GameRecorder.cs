@@ -877,7 +877,7 @@ namespace SmartBot.Plugins
             // Find the most recent SmartMulligan log file
             DateTime mostRecentTime = new DateTime(1900, 1, 1);
             string currentMulliganFile = null;
-            string path = "MulliganProfiles\\MulliganArchives\\" + Bot.CurrentMode() + "_VS_" + enemyClass;
+            string path = "MulliganProfiles\\MulliganArchives\\" + Bot.CurrentMode();
             foreach (string fileName in Directory.GetFiles(path))
             {
                 FileInfo fileInfo = new FileInfo(fileName);
