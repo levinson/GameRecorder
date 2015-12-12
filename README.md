@@ -21,7 +21,7 @@ Note that the bot can be stopped and started without interfering with GameRecord
 
 First off there are two types of misplays. For misplays during mulligan create a post in the [SmartMulligan thread](http://sb-forum.com/index.php?/topic/5930-requestfeedback-smartmulligan/). For all other misplays create a new thread in the [SmartCC AI Misplay forum](http://sb-forum.com/index.php?/forum/31-smartcc-ai-misplay/).
 
-Next, locate the relevant log files and screenshots to include in your report. If you pressed the misplay hotkey when the misplay occurred, then include all the files inside the misplay folder. If you noticed the misplay while analyzing a recorded game, then include only the files for the turn on which the misplay occured.
+Next, locate the relevant log files and screenshots to include in your post. If you pressed the misplay hotkey when the misplay occurred, then attach all the files inside the misplay folder. If you noticed the misplay while analyzing a recorded game, then attach only the files for the turn on which the misplay occured.
 
 Finally, be sure to include any relevant details in your report such as what the bot did, what you expected it to do, and why.
 
