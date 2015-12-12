@@ -1,6 +1,6 @@
 # Game Recorder
 
-Game Recorder is a plugin for [SmartBot](http://sb-forum.com/) (an intelligent Hearthstone bot) that records games by taking screenshots and organizing log files. It can be used to analyze games post-mortem to see what went wrong and even report AI misplays.
+Game Recorder is a plugin for [SmartBot](http://sb-forum.com/) (an intelligent Hearthstone bot) that records games by taking screenshots and saving relevant logs turn-by-turn. Misplay reports can be created live at the press of a hotkey. Recorded games can also be analyzed post-mortem to see what went wrong and report misplays. See [configuration](#configuration) for complete list of features.
 
 ## Installation & Usage
 
@@ -9,6 +9,7 @@ Game Recorder is a plugin for [SmartBot](http://sb-forum.com/) (an intelligent H
 3. Start the bot and watch the ```RecordedGames``` folder in its root directory.
   * A new folder is created for each game (e.g. ```2015-12-05 163737 Rogue vs. Shaman```)
   * Screenshots are captured live throughout the game.
+  * When a misplay is observed press the hotkey to create a misplay report folder.
   * Logs are saved for each turn (or when bot is stopped).
   * Folder name is appended with ```WIN``` or ```LOSS``` when the game ends.
   * Seeds are copied when the game ends (or when bot is stopped).
@@ -19,6 +20,14 @@ Game Recorder is a plugin for [SmartBot](http://sb-forum.com/) (an intelligent H
   * Justify why the bot should have made the alternate play.
 
 Note that the bot can be stopped and started without interfering with GameRecorder.
+
+## Misplay Reporting
+
+First off there are two types of misplays. For misplays during mulligan create a post in the SmartMulligan thread. For all other misplays create a new thread in the SmartCC AI Misplay forum.
+
+Next, locate the relevant log files and screenshots to include in your report. If you pressed the misplay hotkey, then include all the files inside the misplay folder. If you noticed the misplay while analyzing a recorded game, then include only the files for the turn on which the misplay occured.
+
+Finally, be sure to include any relevant details in your report such as what the bot did, what you expected it to do, and why.
 
 ## Configuration
 
