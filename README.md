@@ -9,15 +9,11 @@ Game Recorder is a plugin for [SmartBot](http://sb-forum.com/) (an intelligent H
 3. Start the bot and watch the ```RecordedGames``` folder in its root directory.
   * A new folder is created for each game (e.g. ```2015-12-05 163737 Rogue vs. Shaman```)
   * Screenshots are captured live throughout the game.
-  * When a misplay is observed press the hotkey to create a misplay report folder.
+  * A misplay report folder is created each turn the misplay hotkey is pressed.
   * Logs are saved for each turn (or when bot is stopped).
   * Folder name is appended with ```WIN``` or ```LOSS``` when the game ends.
   * Seeds are copied when the game ends (or when bot is stopped).
 4. Review screenshots and log files to analyze what went wrong in games.
-5. Report misplays by pressing the misplay hotkey, and then creating a new misplay report on the forums.
-  * Include all the files in the generated misplay report folder.
-  * Explain what the bot did and what you expected it to do.
-  * Justify why the bot should have made the alternate play.
 
 Note that the bot can be stopped and started without interfering with GameRecorder.
 
