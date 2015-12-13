@@ -304,7 +304,7 @@ namespace SmartBot.Plugins
 
             if (gameStarted)
             {
-                if (settings.DeleteWins && wonLastGame)
+                if ((settings.DeleteWins && wonLastGame) || turnNum == 0)
                 {
                     Directory.Delete(currentGameFolder, true);
                 }
@@ -639,7 +639,7 @@ namespace SmartBot.Plugins
             string dateTime = DateTime.Now.ToString(dateFormat);
             var friend = Capitalize(friendClass.ToString());
             var enemy = Capitalize(enemyClass.ToString());
-            currentGameFolder = baseFolder + "\\" + dateTime + " " + API.Bot.CurrentMode() + " " + friend + " vs. " + enemy;
+            currentGameFolder = baseFolder + "\\" + dateTime + " " + Bot.CurrentMode() + " " + friend + " vs. " + enemy;
             Directory.CreateDirectory(currentGameFolder);
             gameStarted = true;
         }
