@@ -19,7 +19,7 @@ Note that the bot can be stopped and started without interfering with GameRecord
 
 ## Misplay Reporting
 
-First off there are two types of misplays. For misplays during mulligan create a post in the [SmartMulligan thread](http://sb-forum.com/index.php?/topic/5930-requestfeedback-smartmulligan/). For all other misplays create a new thread in the [SmartCC AI Misplay forum](http://sb-forum.com/index.php?/forum/31-smartcc-ai-misplay/).
+First off there are two types of misplays. For misplays during mulligan create a post in the [SmartMulligan thread](http://sb-forum.com/index.php?/topic/6320-requestsreports-smartmulligan/). For all other misplays create a new thread in the [SmartCC AI Misplay forum](http://sb-forum.com/index.php?/forum/31-smartcc-ai-misplay/).
 
 Next, locate the relevant log files and screenshots to include in your post. If you pressed the misplay hotkey when the misplay occurred, then attach all the files inside the misplay folder. If you noticed the misplay while analyzing a recorded game, then attach only the files for the turn on which the misplay occurred.
 
@@ -41,7 +41,7 @@ ImageResizeEnabled|Enable this to resize screenshots when saving.
 ImageResizeHeight|Enter the maximum screenshot height (in pixels).
 ImageResizeWidth|Enter the maximum screenshot width (in pixels).
 IncludeLogs|Enable this to generate turn-by-turn log files.
-IncludeMulligan|Enable this to copy mulligan output from [SmartMulligan](http://sb-forum.com/index.php?/topic/5930-requestfeedback-smartmulligan/) at start of turn.
+IncludeMulligan|Enable this to copy mulligan output from [SmartMulligan](http://sb-forum.com/index.php?/topic/5930-download-smartmulligan/) at start of turn.
 IncludeSeeds|Enable this to copy seed files at end of game (or when bot is stopped).
 Locale|Set the locale of your game client to translate card names to English in log files.
 LogFriendRequests|Enable this to log friend requests.
