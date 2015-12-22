@@ -6,11 +6,13 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Xml.Linq;
 using Xceed.Wpf.Toolkit.PropertyGrid.Attributes;
+using SmartBot.Plugins.API.Actions;
 
 namespace SmartBot.Plugins
 {
@@ -216,8 +218,6 @@ namespace SmartBot.Plugins
         // Used for hotkeys
         private KeyboardHook hook = new KeyboardHook();
 
-        private bool misplayThisTurn = false;
-
         ~GameRecorderPlugin()
         {
             Dispose();
@@ -279,7 +279,6 @@ namespace SmartBot.Plugins
             screenshotAction = null;
             enemyClass = Card.CClass.NONE;
             friendClass = Card.CClass.NONE;
-            misplayThisTurn = false;
         }
 
         public override void OnGameEnd()
@@ -287,7 +286,7 @@ namespace SmartBot.Plugins
             EndGame();
         }
 
-        private void EndGame()
+        private void EndGame(bool previous = false)
         {
             if (turnWriter != null)
             {
@@ -295,18 +294,17 @@ namespace SmartBot.Plugins
                 turnWriter = null;
             }
 
-            CopySeeds();
-
-            if (misplayThisTurn)
-            {
-                CreateMisplayReport();
-            }
+            CopySeeds(previous);
 
             if (gameStarted)
             {
                 if ((settings.DeleteWins && wonLastGame) || turnNum == 0)
                 {
                     Directory.Delete(currentGameFolder, true);
+                }
+                else if (previous)
+                {
+                    Log("Results for the previous game are unknown");
                 }
                 else
                 {
@@ -390,12 +388,12 @@ namespace SmartBot.Plugins
             // Check if OnGameEnd was never fired
             if (gameStarted)
             {
-                EndGame();
+                EndGame(true);
             }
 
             if (IsCurrentGameModeSelected())
             {
-                CreateGameFolder(friendClass, enemyClass);
+                StartGame(friendClass, enemyClass);
             }
 
             if (settings.ScreenshotMulligan)
@@ -432,20 +430,13 @@ namespace SmartBot.Plugins
 
         public override void OnTurnBegin()
         {
-            if (misplayThisTurn)
-            {
-                CopySeeds();
-                CreateMisplayReport();
-                misplayThisTurn = false;
-            }
-
             turnNum += 1;
             actionNum = 0;
 
             if (!gameStarted && IsCurrentGameModeSelected())
             {
                 var board = API.Bot.CurrentBoard;                
-                CreateGameFolder(board.FriendClass, board.EnemyClass);
+                StartGame(board.FriendClass, board.EnemyClass);
             }
 
             SetupTurnLogger();
@@ -630,23 +621,18 @@ namespace SmartBot.Plugins
 
         private static readonly string dateFormat = "yyyy-MM-dd HHmmss";
 
-        private void CreateGameFolder(Card.CClass friendClass, Card.CClass enemyClass)
+        private void StartGame(Card.CClass friendClass, Card.CClass enemyClass)
         {
             this.enemyClass = enemyClass;
             this.friendClass = friendClass;
 
             // Create folder for the new game
             string dateTime = DateTime.Now.ToString(dateFormat);
-            var friend = Capitalize(friendClass.ToString());
-            var enemy = Capitalize(enemyClass.ToString());
+            var friend = friendClass.ToString().Capitalize();
+            var enemy = enemyClass.ToString().Capitalize();
             currentGameFolder = baseFolder + "\\" + dateTime + " " + Bot.CurrentMode() + " " + friend + " vs. " + enemy;
             Directory.CreateDirectory(currentGameFolder);
             gameStarted = true;
-        }
-
-        private string Capitalize(String str)
-        {
-            return str.Substring(0, 1).ToUpper() + str.Substring(1).ToLower();
         }
 
         private static Bitmap ResizeImage(Bitmap original, int newWidth, int newHeight)
@@ -708,7 +694,7 @@ namespace SmartBot.Plugins
             var encoderParams = GetEncoderParams(settings.ImageQuality);
 
             // Build screenshot file name
-            string turnAndAction = turnNum.ToString("D2") + "-" + actionNum.ToString("D2");
+            string turnAndAction = "Turn_" + turnNum + "_" + actionNum;
             string fileExtension = settings.ImageFormat.Equals("JPEG") ? "jpg" : settings.ImageFormat.ToLower();
             string fileName = turnAndAction + " " + screenshotAction + "." + fileExtension;
 
@@ -773,7 +759,7 @@ namespace SmartBot.Plugins
             else
             {
                 // Write queued log messages now
-                string filePath = currentGameFolder + "\\BeginGame_Logs.txt";
+                string filePath = currentGameFolder + "\\Turn_0_Logs.txt";
                 using (var writer = new StreamWriter(filePath))
                 {
                     foreach (string message in queuedLogMessages)
@@ -931,39 +917,23 @@ namespace SmartBot.Plugins
                 HideFileAccessTimes(mulliganFilePath);
             }
 
-            Log("Copied smart mulligan output");
+            Log("Copied SmartMulligan output");
         }
 
-        private void CopySeeds()
+        private void CopySeeds(bool previous = false)
         {
             if (!settings.IncludeSeeds || !gameStarted)
             {
                 return;
             }
 
-            // Find the most recent seed sub-directory
-            DateTime mostRecentTime = new DateTime(1900, 1, 1);
-            string currentSeedDir = null;
+            var dirs = Directory.GetDirectories("Seeds")
+                .Select(path => new DirectoryInfo(path))
+                .OrderByDescending(info => info.LastWriteTime);
 
-            foreach (string seedDir in Directory.GetDirectories("Seeds"))
-            {
-                DirectoryInfo info = new DirectoryInfo(seedDir);
-                DateTime createdTime = info.LastWriteTime;
+            var dir = previous ? dirs.ElementAt(1) : dirs.First();
 
-                if (createdTime > mostRecentTime)
-                {
-                    currentSeedDir = seedDir;
-                    mostRecentTime = createdTime;
-                }
-            }
-
-            if (currentSeedDir == null || DateTime.Now.AddMinutes(-1).CompareTo(mostRecentTime) > 0)
-            {
-                Log("Failed to locate current seeds!");
-                return;
-            }
-
-            string[] seedFiles = Directory.GetFiles(currentSeedDir, "*.txt");
+            string[] seedFiles = Directory.GetFiles(dir.FullName, "*.txt");
 
             // Build set of turns from seed directory
             var turns = new HashSet<int>();
@@ -1043,51 +1013,7 @@ namespace SmartBot.Plugins
                 return;
             }
 
-            misplayThisTurn = true;
             TakeScreenshot("Misplay");
-            Log("Misplay noted - report will be created shortly.");
-        }
-
-        private void CreateMisplayReport()
-        {
-            // Create folder for the misplay
-            string dateTime = DateTime.Now.ToString(dateFormat);
-            var friend = Capitalize(friendClass.ToString());
-            var enemy = Capitalize(enemyClass.ToString());
-            string misplayFolder = "Misplays\\" + dateTime + " " + API.Bot.CurrentMode() + " " + friend + " vs. " + enemy;
-            Directory.CreateDirectory(misplayFolder);
-
-            if (turnWriter != null)
-            {
-                turnWriter.Flush();
-            }
-
-            string screenshotPrefix = turnNum.ToString("D2") + "-";
-            string logfilePrefix = "Turn_" + turnNum + "_";
-
-            // Copy relevant misplay media
-            foreach (string filePath in Directory.GetFiles(currentGameFolder))
-            {
-                var info = new FileInfo(filePath);
-
-                // Copy files for current turn
-                if (info.Name.StartsWith(screenshotPrefix) || info.Name.StartsWith(logfilePrefix))
-                {
-                    string targetPath = misplayFolder + "\\" + info.Name;
-                    File.Copy(filePath, targetPath);
-                    if (settings.HidePersonalInfo && info.Name.Contains("Logs"))
-                    {
-                        HideFileAccessTimes(targetPath);
-                    }
-                }
-            }
-
-            if (turnNum == 0)
-            {
-                File.Copy(currentGameFolder + "\\SmartMulligan.txt", misplayFolder + "\\SmartMulligan.txt");
-            }
-
-            Log("Created misplay report: " + misplayFolder);
         }
     }
 
@@ -1102,6 +1028,11 @@ namespace SmartBot.Plugins
                 return text;
             }
             return text.Substring(0, pos) + replace + text.Substring(pos + search.Length);
+        }
+
+        public static string Capitalize(this string str)
+        {
+            return str.Substring(0, 1).ToUpper() + str.Substring(1).ToLower();
         }
     }
 
