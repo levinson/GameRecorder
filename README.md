@@ -8,8 +8,7 @@ Game Recorder is a plugin for [SmartBot](http://sb-forum.com/) (an intelligent H
 2. Enable the GameRecorder plugin and set desired configurations (see next section).
 3. Start the bot and watch the ```RecordedGames``` folder in its root directory.
   * A new folder is created for each game (e.g. ```2015-12-05 163737 Rogue vs. Shaman```)
-  * Screenshots are captured live throughout the game.
-  * A misplay report folder is created each turn the misplay hotkey is pressed.
+  * Screenshots are captured on selected events and when the misplay hotkey is pressed.
   * Logs are saved for each turn (or when bot is stopped).
   * Folder name is appended with ```WIN``` or ```LOSS``` when the game ends.
   * Seeds are copied when the game ends (or when bot is stopped).
@@ -19,11 +18,11 @@ Note that the bot can be stopped and started without interfering with GameRecord
 
 ## Misplay Reporting
 
-Review screenshots and log files in recorded game folders to discover misplays. If you pressed the misplay hotkey during a game, then search for screenshots with the word 'Misplay'.
+Review screenshots and log files in recorded game folders to discover misplays. If you pressed the misplay hotkey during a game, then search for screenshots with the word 'Misplay' in the name.
 
 For misplays during mulligan create a post in the [SmartMulligan thread](http://sb-forum.com/index.php?/topic/6320-requestsreports-smartmulligan/). For all other misplays create a new thread in the [SmartCC AI Misplay forum](http://sb-forum.com/index.php?/forum/31-smartcc-ai-misplay/).
 
-In your misplay report include all the files on the turn for which the misplay occurred. Also be sure to include any relevant details in your report such as what the bot did, what you expected it to do, and why.
+In your misplay report attach all the files for the turn on which the misplay occurred, and also include relevant details such as what the bot did, what you expected it to do, and why.
 
 ## Configuration
 
