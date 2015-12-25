@@ -798,7 +798,7 @@ namespace SmartBot.Plugins
                 InitializeNameTranslations();
             }
 
-            string addAction = "[DEBUG]BattleProcesser : AddAction()";
+            string addAction = "Play sequence : ";
             int addActionIndex = message.IndexOf(addAction);
             if (addActionIndex != -1)
             {
