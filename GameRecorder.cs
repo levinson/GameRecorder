@@ -12,7 +12,6 @@ using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Xml.Linq;
 using Xceed.Wpf.Toolkit.PropertyGrid.Attributes;
-using SmartBot.Plugins.API.Actions;
 
 namespace SmartBot.Plugins
 {
@@ -57,6 +56,7 @@ namespace SmartBot.Plugins
             gameModes.Add("Arena & Ranked");
             gameModes.Add("Arena & Unranked");
             gameModes.Add("Ranked & Unranked");
+            gameModes.Add("None");
             return gameModes;
         }
     }
@@ -131,6 +131,7 @@ namespace SmartBot.Plugins
         public bool ScreenshotChoice { get; set; }
         public bool ScreenshotResimulate { get; set; }
         public bool ScreenshotConcede { get; set; }
+        public bool ScreenshotLegend { get; set; }
         public bool ScreenshotLethal { get; set; }
         public bool ScreenshotVictory { get; set; }
         public bool ScreenshotDefeat { get; set; }
@@ -165,6 +166,7 @@ namespace SmartBot.Plugins
             ScreenshotChoice = true;
             ScreenshotResimulate = true;
             ScreenshotConcede = true;
+            ScreenshotLegend = true;
             ScreenshotLethal = true;
             ScreenshotVictory = true;
             ScreenshotDefeat = true;
@@ -188,6 +190,8 @@ namespace SmartBot.Plugins
         private int actionNum = 0;
 
         private bool wonLastGame = false;
+
+        private bool isLegend = false;
 
         private GameRecorderSettings settings = null;
 
@@ -372,6 +376,11 @@ namespace SmartBot.Plugins
             }
         }
 
+        public override void OnStarted()
+        {
+            isLegend = Bot.GetPlayerDatas().GetRank() == 0;
+        }
+
         public override void OnStopped()
         {
             if (turnWriter != null)
@@ -381,6 +390,19 @@ namespace SmartBot.Plugins
 
             // Overwritten when game ends
             CopySeeds();
+        }
+
+        public override void OnTick()
+        {
+            if (!isLegend && Bot.GetPlayerDatas().GetRank() == 0)
+            {
+                isLegend = true;
+
+                if (settings.ScreenshotLegend)
+                {
+                    TakeScreenshot("Legend");
+                }
+            }
         }
 
         public override void OnHandleMulligan(List<Card.Cards> choices, Card.CClass enemyClass, Card.CClass friendClass)
@@ -435,7 +457,7 @@ namespace SmartBot.Plugins
 
             if (!gameStarted && IsCurrentGameModeSelected())
             {
-                var board = API.Bot.CurrentBoard;                
+                var board = Bot.CurrentBoard;
                 StartGame(board.FriendClass, board.EnemyClass);
             }
 
