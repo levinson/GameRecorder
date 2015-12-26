@@ -51,6 +51,7 @@ ScreenshotChoice|Whether to capture screenshot of choice events (e.g. Discover).
 ScreenshotConcede|Whether to capture screeshot when conceding.
 ScreenshotDefeat|Whether to capture screenshot on defeat.
 ScreenshotEndTurn|Whether to capture screenshot at end of turn.
+ScreenshotLegend|Whether to capture screenshot when legend rank is obtained.
 ScreenshotLethal|Whether to capture screenshot when lethal is found.
 ScreenshotMulligan|Whether to capture screenshot of mulligan selections.
 ScreenshotResimulate|Whether to capture screenshot when bot resimulates.
