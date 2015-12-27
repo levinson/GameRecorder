@@ -394,7 +394,9 @@ namespace SmartBot.Plugins
 
         public override void OnTick()
         {
-            if (!isLegend && Bot.GetPlayerDatas().GetRank() == 0)
+            var playerData = Bot.GetPlayerDatas();
+
+            if (!isLegend && playerData != null && playerData.GetRank() == 0)
             {
                 isLegend = true;
 
