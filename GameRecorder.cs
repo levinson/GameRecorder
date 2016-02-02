@@ -419,11 +419,6 @@ namespace SmartBot.Plugins
             {
                 StartGame(friendClass, enemyClass);
             }
-
-            if (settings.ScreenshotMulligan)
-            {
-                TakeScreenshot("Mulligan");
-            }
         }
 
         public override void OnMulliganCardsReplaced(List<Card.Cards> replacedCards)
@@ -884,23 +879,17 @@ namespace SmartBot.Plugins
                 return;
             }
 
-            // Find the most recent SmartMulligan log file
-            DateTime mostRecentTime = new DateTime(1900, 1, 1);
-            string currentMulliganFile = null;
-            string path = "MulliganProfiles\\MulliganArchives\\" + Bot.CurrentMode();
-            foreach (string fileName in Directory.GetFiles(path))
+            DirectoryInfo mulliganDirectory = new DirectoryInfo("MulliganProfiles\\MulliganArchives");
+            if (!mulliganDirectory.Exists)
             {
-                FileInfo fileInfo = new FileInfo(fileName);
-                DateTime modified = fileInfo.LastWriteTime;
-
-                if (modified > mostRecentTime)
-                {
-                    mostRecentTime = modified;
-                    currentMulliganFile = fileName;
-                }
+                Log("Failed to find the SmartMulligan directory!");
+                return;
             }
 
-            if (currentMulliganFile == null || DateTime.Now.AddMinutes(-1).CompareTo(mostRecentTime) > 0)
+            // Find the most recent SmartMulligan log file
+            FileInfo mulliganFile = mulliganDirectory.GetFiles().Aggregate((f1, f2) => f1.LastWriteTime > f2.LastWriteTime ? f1 : f2);
+
+            if (DateTime.Now.AddMinutes(-1).CompareTo(mulliganFile.LastWriteTime) > 0)
             {
                 Log("Failed to find a current SmartMulligan file!");
                 return;
@@ -908,16 +897,21 @@ namespace SmartBot.Plugins
 
             // Build mulligan log entries for this game
             var mulliganLogs = new List<String>();
-            using (FileStream fs = File.OpenRead(currentMulliganFile))
+            using (FileStream fs = File.OpenRead(mulliganFile.FullName))
             using (BufferedStream bs = new BufferedStream(fs))
             using (StreamReader sr = new StreamReader(bs))
             {
                 string line;
                 while ((line = sr.ReadLine()) != null)
                 {
-                    if (line.Contains("=============================================="))
+
+                    if (line.Contains("==================START COPY======================="))
                     {
                         mulliganLogs.Clear();
+                    }
+                    else if (line.Contains("==================END COPY======================="))
+                    {
+                        // Ignore this line
                     }
                     else
                     {
@@ -927,7 +921,7 @@ namespace SmartBot.Plugins
             }
 
             // Write last output from SmartMulligan to file
-            string mulliganFilePath = currentGameFolder + "\\SmartMulligan.txt";
+            string mulliganFilePath = currentGameFolder + "\\Turn_0_SmartMulligan.txt";
             using (StreamWriter writer = new StreamWriter(mulliganFilePath))
             {
                 foreach (string line in mulliganLogs)
