@@ -629,9 +629,11 @@ namespace SmartBot.Plugins
                 case Bot.Mode.Arena:
                 case Bot.Mode.ArenaAuto:
                     return settings.GameModes.Contains("Arena");
-                case Bot.Mode.Ranked:
+                case Bot.Mode.RankedStandard:
+                case Bot.Mode.RankedWild:
                     return settings.GameModes.Contains("Ranked");
-                case  Bot.Mode.Unranked:
+                case Bot.Mode.UnrankedStandard:
+                case Bot.Mode.UnrankedWild:
                     return settings.GameModes.Contains("Unranked");
                 default:
                     return false;
