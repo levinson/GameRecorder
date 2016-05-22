@@ -171,7 +171,7 @@ namespace SmartBot.Plugins
             ScreenshotVictory = true;
             ScreenshotDefeat = true;
             DeleteWins = false;
-            DeleteGames = DeleteGamesSource.NEVER;
+            DeleteGames = DeleteGamesSource.TWO_WEEKS;
             MisplayHotkey = MisplayHotkeySource.CONTROL_M;
         }
     }
@@ -191,7 +191,10 @@ namespace SmartBot.Plugins
 
         private bool wonLastGame = false;
 
-        private bool isLegend = false;
+        // Screenshot when legend is first reached
+        private bool wasLegend = false;
+        private double legendScreenshotInterval = 1.5; // in seconds
+        private DateTime nextLegendScreenshot = DateTime.Now;
 
         private GameRecorderSettings settings = null;
 
@@ -283,6 +286,7 @@ namespace SmartBot.Plugins
             screenshotAction = null;
             enemyClass = Card.CClass.NONE;
             friendClass = Card.CClass.NONE;
+            wasLegend = IsLegend();
         }
 
         public override void OnGameEnd()
@@ -376,11 +380,6 @@ namespace SmartBot.Plugins
             }
         }
 
-        public override void OnStarted()
-        {
-            isLegend = Bot.GetPlayerDatas().GetRank() == 0;
-        }
-
         public override void OnStopped()
         {
             if (turnWriter != null)
@@ -394,14 +393,14 @@ namespace SmartBot.Plugins
 
         public override void OnTick()
         {
-            var playerData = Bot.GetPlayerDatas();
-
-            if (!isLegend && playerData != null && playerData.GetRank() == 0)
+            // Detect when legend is reached for first time
+            if (settings.ScreenshotLegend && !wasLegend && IsLegend())
             {
-                isLegend = true;
-
-                if (settings.ScreenshotLegend)
+                // Take screenshots at interval until game ends
+                var now = DateTime.Now;
+                if (now.CompareTo(nextLegendScreenshot) > 0)
                 {
+                    nextLegendScreenshot = now.AddSeconds(legendScreenshotInterval);
                     TakeScreenshot("Legend");
                 }
             }
@@ -640,12 +639,19 @@ namespace SmartBot.Plugins
             }
         }
 
+        private bool IsLegend()
+        {
+            var playerData = Bot.GetPlayerDatas();
+            return playerData != null && playerData.GetRank() == 0;
+        }
+
         private static readonly string dateFormat = "yyyy-MM-dd HHmmss";
 
         private void StartGame(Card.CClass friendClass, Card.CClass enemyClass)
         {
             this.enemyClass = enemyClass;
             this.friendClass = friendClass;
+            wasLegend = IsLegend();
 
             // Create folder for the new game
             string dateTime = DateTime.Now.ToString(dateFormat);
@@ -881,7 +887,7 @@ namespace SmartBot.Plugins
                 return;
             }
 
-            DirectoryInfo mulliganDirectory = new DirectoryInfo("MulliganProfiles\\MulliganArchives");
+            DirectoryInfo mulliganDirectory = new DirectoryInfo("Logs\\SmartMulligan");
             if (!mulliganDirectory.Exists)
             {
                 Log("Failed to find the SmartMulligan directory!");
@@ -889,7 +895,7 @@ namespace SmartBot.Plugins
             }
 
             // Find the most recent SmartMulligan log file
-            FileInfo mulliganFile = mulliganDirectory.GetFiles().Aggregate((f1, f2) => f1.LastWriteTime > f2.LastWriteTime ? f1 : f2);
+            FileInfo mulliganFile = mulliganDirectory.GetFiles().First(file => file.Name.Equals("MulliganHistory.txt"));
 
             if (DateTime.Now.AddMinutes(-1).CompareTo(mulliganFile.LastWriteTime) > 0)
             {
@@ -907,13 +913,9 @@ namespace SmartBot.Plugins
                 while ((line = sr.ReadLine()) != null)
                 {
 
-                    if (line.Contains("==================START COPY======================="))
+                    if (line.Contains("========================================="))
                     {
                         mulliganLogs.Clear();
-                    }
-                    else if (line.Contains("==================END COPY======================="))
-                    {
-                        // Ignore this line
                     }
                     else
                     {
@@ -992,7 +994,7 @@ namespace SmartBot.Plugins
 
         private void RegisterHotkeys()
         {
-            if (!settings.MisplayHotkey.Equals(MisplayHotkeySource.NONE))
+            if (settings.Enabled && !settings.MisplayHotkey.Equals(MisplayHotkeySource.NONE))
             {
                 // register the event that is fired after the key press.
                 hook.KeyPressed += new EventHandler<KeyPressedEventArgs>(OnHotkeyPressed);
@@ -1021,19 +1023,10 @@ namespace SmartBot.Plugins
         private void OnHotkeyPressed(object sender, KeyPressedEventArgs e)
         {
             // Currently there is only one hotkey -- so assume event is for misplay
-
-            if (!settings.Enabled)
+            if (settings.Enabled)
             {
-                return;
+                TakeScreenshot("Misplay");
             }
-
-            if (!gameStarted)
-            {
-                Log("Cannot record misplay before game started.");
-                return;
-            }
-
-            TakeScreenshot("Misplay");
         }
     }
 
