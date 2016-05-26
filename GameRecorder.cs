@@ -125,6 +125,8 @@ namespace SmartBot.Plugins
         public bool LogFriendRequests { get; set; }
         public bool LogWhispers { get; set; }
 
+        public string SaveLocation { get; set; }
+
         public bool ScreenshotMulligan { get; set; }
         public bool ScreenshotBeginTurn { get; set; }
         public bool ScreenshotEndTurn { get; set; }
@@ -149,7 +151,7 @@ namespace SmartBot.Plugins
             Name = "GameRecorder";
             Locale = "enUS";
             GameModes = "All";
-            this.ImageFormat = "Jpeg";
+            ImageFormat = "Jpeg";
             ImageQuality = 50;
             ImageResizeEnabled = false;
             ImageResizeHeight = 600;
@@ -160,6 +162,7 @@ namespace SmartBot.Plugins
             HidePersonalInfo = true;
             LogFriendRequests = true;
             LogWhispers = true;
+            SaveLocation = "RecordedGames";
             ScreenshotMulligan = true;
             ScreenshotBeginTurn = true;
             ScreenshotEndTurn = true;
@@ -179,7 +182,7 @@ namespace SmartBot.Plugins
     public class GameRecorderPlugin : Plugin
     {
         // Top-level folder where all output is saved
-        private const string baseFolder = "RecordedGames";
+        private string baseFolder = null;
 
         // Folder to save screenshots for current game
         private string currentGameFolder = null;
@@ -208,6 +211,9 @@ namespace SmartBot.Plugins
         // Writers for whispers and friend requests received
         private StreamWriter whisperWriter = null;
         private StreamWriter friendRequestWriter = null;
+
+        // Reader for SmartMulligan history file
+        private StreamReader mulliganReader = null;
 
         // Stores action for next received screenshot
         private string screenshotAction = null;
@@ -251,6 +257,12 @@ namespace SmartBot.Plugins
                 friendRequestWriter = null;
             }
 
+            if (mulliganReader != null)
+            {
+                mulliganReader.Close();
+                mulliganReader = null;
+            }
+
             // Unregister event handlers
             Debug.OnLogReceived -= OnLogReceived;
             GUI.OnScreenshotReceived -= OnScreenshotReceived;
@@ -268,6 +280,16 @@ namespace SmartBot.Plugins
             settings = (GameRecorderSettings)DataContainer;
             Debug.OnLogReceived += OnLogReceived;
             GUI.OnScreenshotReceived += OnScreenshotReceived;
+
+            string saveLocation = settings.SaveLocation;
+            if (saveLocation == null || saveLocation.Equals(""))
+            {
+                baseFolder = "RecordedGames";
+            }
+            else
+            {
+                baseFolder = saveLocation;
+            }
 
             RegisterHotkeys();
         }
@@ -373,7 +395,7 @@ namespace SmartBot.Plugins
                         }
                         catch (Exception e)
                         {
-                            Log("Failed to delete old game folder '" + gameFolder.Name + "' due to '" + e.Message);
+                            Log("Failed to delete old game folder due to: " + e);
                         }
                     }
                 }
@@ -518,12 +540,22 @@ namespace SmartBot.Plugins
         {
             if (settings.LogWhispers)
             {
-                if (whisperWriter == null)
+                try
                 {
-                    whisperWriter = new StreamWriter(baseFolder + "\\Whispers.txt", true);
+                    if (whisperWriter == null)
+                    {
+                        whisperWriter = new StreamWriter(baseFolder + "\\Whispers.txt", true);
+                    }
+
+                    whisperWriter.WriteLine(GetTimestampPrefix() + friend.GetName() + " says " + message);
+                    whisperWriter.Flush();
                 }
-                whisperWriter.WriteLine(GetTimestampPrefix() + friend.GetName() + " says " + message);
-                whisperWriter.Flush();
+                catch (Exception e)
+                {
+                    Log("Failed to log whisper due to: " + e);
+                    whisperWriter.Close();
+                    whisperWriter = null;
+                }
             }
         }
 
@@ -531,25 +563,34 @@ namespace SmartBot.Plugins
         {
             if (settings.LogFriendRequests)
             {
-                if (friendRequestWriter == null)
+                try
                 {
-                    friendRequestWriter = new StreamWriter(baseFolder + "\\FriendRequests.txt", true);
+                    if (friendRequestWriter == null)
+                    {
+                        friendRequestWriter = new StreamWriter(baseFolder + "\\FriendRequests.txt", true);
+                    }
+
+                    friendRequestWriter.WriteLine(GetTimestampPrefix() + request.GetPlayerName());
+                    friendRequestWriter.Flush();
                 }
-                friendRequestWriter.WriteLine(GetTimestampPrefix() + request.GetPlayerName());
-                friendRequestWriter.Flush();
+                catch (Exception e)
+                {
+                    Log("Failed to log friend request due to: " + e);
+                    friendRequestWriter.Close();
+                    friendRequestWriter = null;
+                }
             }
         }
 
         private void OnLogReceived(string message)
         {
-            // TODO: Ask wirmate to add uncaught exception handling
+            if (!settings.IncludeLogs)
+            {
+                return;
+            }
+
             try
             {
-                if (!settings.IncludeLogs)
-                {
-                    return;
-                }
-
                 if (turnWriter != null)
                 {
                     WriteLogMessage(turnWriter, message);
@@ -561,7 +602,7 @@ namespace SmartBot.Plugins
             }
             catch(Exception e)
             {
-                Log("Error while handling received log message: " + e.StackTrace);
+                Log("Failed to write log message due to: " + e.StackTrace);
             }
         }
 
@@ -780,6 +821,7 @@ namespace SmartBot.Plugins
             {
                 // Close the existing log file
                 turnWriter.Close();
+                turnWriter = null;
 
                 HideFileAccessTimes(turnWriterPath);
             }
@@ -799,17 +841,28 @@ namespace SmartBot.Plugins
             }
 
             // Setup new log file for this turn
-            turnWriterPath = currentGameFolder + "\\" + "Turn_" + turnNum + "_Logs.txt";
-            turnWriter = new StreamWriter(turnWriterPath);
+            try
+            {
+                turnWriterPath = currentGameFolder + "\\" + "Turn_" + turnNum + "_Logs.txt";
+                turnWriter = new StreamWriter(turnWriterPath);
+            }
+            catch (Exception e)
+            {
+                Log("Failed to setup turn logger due to: " + e);
+                turnWriterPath = null;
+            }
         }
 
         private static DateTime year2000 = new DateTime(2000, 1, 1);
 
         private static void HideFileAccessTimes(string filePath)
         {
-            File.SetCreationTime(filePath, year2000);
-            File.SetLastAccessTime(filePath, year2000);
-            File.SetLastWriteTime(filePath, year2000);
+            if (filePath != null)
+            {
+                File.SetCreationTime(filePath, year2000);
+                File.SetLastAccessTime(filePath, year2000);
+                File.SetLastWriteTime(filePath, year2000);
+            }
         }
 
         private string GetTimestampPrefix()
@@ -887,59 +940,64 @@ namespace SmartBot.Plugins
                 return;
             }
 
-            DirectoryInfo mulliganDirectory = new DirectoryInfo("Logs\\SmartMulligan");
-            if (!mulliganDirectory.Exists)
+            try
             {
-                Log("Failed to find the SmartMulligan directory!");
-                return;
-            }
-
-            // Find the most recent SmartMulligan log file
-            FileInfo mulliganFile = mulliganDirectory.GetFiles().First(file => file.Name.Equals("MulliganHistory.txt"));
-
-            if (DateTime.Now.AddMinutes(-1).CompareTo(mulliganFile.LastWriteTime) > 0)
-            {
-                Log("Failed to find a current SmartMulligan file!");
-                return;
-            }
-
-            // Build mulligan log entries for this game
-            var mulliganLogs = new List<String>();
-            using (FileStream fs = File.OpenRead(mulliganFile.FullName))
-            using (BufferedStream bs = new BufferedStream(fs))
-            using (StreamReader sr = new StreamReader(bs))
-            {
-                string line;
-                while ((line = sr.ReadLine()) != null)
+                DirectoryInfo mulliganDirectory = new DirectoryInfo("Logs\\SmartMulligan");
+                if (!mulliganDirectory.Exists)
                 {
+                    Log("Failed to find the SmartMulligan directory!");
+                    return;
+                }
 
-                    if (line.Contains("========================================="))
+                // Find the SmartMulligan history file
+                FileInfo mulliganFile = mulliganDirectory.GetFiles().First(file => file.Name.Equals("MulliganHistory.txt"));
+
+                if (DateTime.Now.AddMinutes(-1).CompareTo(mulliganFile.LastWriteTime) > 0)
+                {
+                    Log("Failed to find an active SmartMulligan history file!");
+                    return;
+                }
+
+                var mulliganLogs = new List<String>();
+                using (FileStream fs = File.OpenRead(mulliganFile.FullName))
+                using (BufferedStream bs = new BufferedStream(fs))
+                using (StreamReader sr = new StreamReader(bs))
+                {
+                    string line;
+                    while ((line = sr.ReadLine()) != null)
                     {
-                        mulliganLogs.Clear();
-                    }
-                    else
-                    {
-                        mulliganLogs.Add(line);
+                        if (line.Contains("========================================="))
+                        {
+                            mulliganLogs.Clear();
+                        }
+                        else
+                        {
+                            mulliganLogs.Add(line);
+                        }
                     }
                 }
-            }
 
-            // Write last output from SmartMulligan to file
-            string mulliganFilePath = currentGameFolder + "\\Turn_0_SmartMulligan.txt";
-            using (StreamWriter writer = new StreamWriter(mulliganFilePath))
-            {
-                foreach (string line in mulliganLogs)
+                // Write last output from SmartMulligan to file
+                string mulliganFilePath = currentGameFolder + "\\Turn_0_SmartMulligan.txt";
+                using (StreamWriter writer = new StreamWriter(mulliganFilePath))
                 {
-                    writer.WriteLine(line);
+                    foreach (string line in mulliganLogs)
+                    {
+                        writer.WriteLine(line);
+                    }
                 }
-            }
 
-            if (settings.HidePersonalInfo)
+                if (settings.HidePersonalInfo)
+                {
+                    HideFileAccessTimes(mulliganFilePath);
+                }
+
+                Log("Copied SmartMulligan output");
+            }
+            catch (Exception e)
             {
-                HideFileAccessTimes(mulliganFilePath);
+                Log("Failed to save SmartMulligan output due to: " + e);
             }
-
-            Log("Copied SmartMulligan output");
         }
 
         private void CopySeeds(bool previous = false)
