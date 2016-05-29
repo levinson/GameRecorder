@@ -9,7 +9,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Xml.Linq;
@@ -428,27 +427,29 @@ namespace SmartBot.Plugins
             {
                 String pluginPath = "Plugins\\GameRecorder.cs";
 
-                // Get SHA of local plugin
-                String localSha;
+                // Get first line of local plugin
+                String firstLine;
                 using (var stream = new FileStream(pluginPath, FileMode.Open, FileAccess.Read))
-                using (var cryptoProvider = new SHA1CryptoServiceProvider())
+                using (var reader = new StreamReader(stream))
                 {
-                    localSha = BitConverter.ToString(cryptoProvider.ComputeHash(stream)).Replace("-", "").ToLower();
+                    firstLine = reader.ReadLine();
                 }
 
                 // Get SHA of latest GameRecorder plugin
                 var branchesJson = fetchUrl(@"https://api.github.com/repos/levinson/GameRecorder/branches");
                 String shaPrefix = "\"sha\":\"";
                 int shaIndex = branchesJson.IndexOf(shaPrefix);
-                String remoteSha = branchesJson.Substring(shaIndex + shaPrefix.Length, 40);
+                String gitCommitSha = branchesJson.Substring(shaIndex + shaPrefix.Length, 40);
 
                 // If sha's are different then update
-                if (!localSha.Equals(remoteSha))
+                String newFirstLine = "/** " + gitCommitSha + " */";
+                if (!firstLine.Equals(newFirstLine))
                 {
                     String latestSource = fetchUrl(@"https://raw.githubusercontent.com/levinson/GameRecorder/master/GameRecorder.cs");
                     using (var stream = new FileStream(pluginPath, FileMode.Create, FileAccess.Write))
                     using (var writer = new StreamWriter(stream))
                     {
+                        writer.WriteLine(newFirstLine);
                         writer.Write(latestSource);
                         Log("Updated GameRecorder to latest version. Reload plugins for changes to take effect.");
                     }
