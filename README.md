@@ -32,6 +32,7 @@ Name|Description
 ---|---
 DeleteGames|Select when to delete old recorded games.
 DeleteWins|Enable this to delete recorded games that end in a win.
+DisableAutoUpdate|Enable this to disable auto updates (not recommended).
 GameModes|Select the game modes to record.
 HidePersonalInfo|Enable this to gray out personal info in screenshots, remove timestamps and auth messages from logs, and mask file modification times (highly recommended).
 ImageFormat|Select the image format for saving screenshots.
