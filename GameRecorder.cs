@@ -7,7 +7,9 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Xml.Linq;
@@ -103,6 +105,8 @@ namespace SmartBot.Plugins
     [Serializable]
     public class GameRecorderSettings : PluginDataContainer
     {
+        public bool DisableAutoUpdate { get; set; }
+
         [ItemsSource(typeof(LocaleItemsSource))]
         public string Locale { get; set; }
 
@@ -149,6 +153,7 @@ namespace SmartBot.Plugins
         public GameRecorderSettings()
         {
             Name = "GameRecorder";
+            DisableAutoUpdate = false;
             Locale = "enUS";
             GameModes = "All";
             ImageFormat = "Jpeg";
@@ -401,6 +406,65 @@ namespace SmartBot.Plugins
             }
         }
 
+        private String fetchUrl(String url)
+        {
+            var request = HttpWebRequest.CreateHttp(url);
+            request.UserAgent = "GameRecorder"; // User-Agent is required by github API
+            using (var response = request.GetResponse())
+            using (var reader = new StreamReader(response.GetResponseStream()))
+            {
+                return reader.ReadToEnd();
+            }
+        }
+
+        private void CheckForUpdates()
+        {
+            if (settings.DisableAutoUpdate)
+            {
+                return;
+            }
+
+            try
+            {
+                String pluginPath = "Plugins\\GameRecorder.cs";
+
+                // Get SHA of local plugin
+                String localSha;
+                using (var stream = new FileStream(pluginPath, FileMode.Open, FileAccess.Read))
+                using (var cryptoProvider = new SHA1CryptoServiceProvider())
+                {
+                    localSha = BitConverter.ToString(cryptoProvider.ComputeHash(stream)).Replace("-", "").ToLower();
+                }
+
+                // Get SHA of latest GameRecorder plugin
+                var branchesJson = fetchUrl(@"https://api.github.com/repos/levinson/GameRecorder/branches");
+                String shaPrefix = "\"sha\":\"";
+                int shaIndex = branchesJson.IndexOf(shaPrefix);
+                String remoteSha = branchesJson.Substring(shaIndex + shaPrefix.Length, 40);
+
+                // If sha's are different then update
+                if (!localSha.Equals(remoteSha))
+                {
+                    String latestSource = fetchUrl(@"https://raw.githubusercontent.com/levinson/GameRecorder/master/GameRecorder.cs");
+                    using (var stream = new FileStream(pluginPath, FileMode.Create, FileAccess.Write))
+                    using (var writer = new StreamWriter(stream))
+                    {
+                        writer.Write(latestSource);
+                        Log("Updated GameRecorder to latest version. Reload plugins for changes to take effect.");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log("Failed to check for updates due to: " + e);
+            }
+        }
+
+        public override void OnStarted()
+        {
+            CheckForUpdates();
+        }
+
         public override void OnStopped()
         {
             if (turnWriter != null)
@@ -410,6 +474,9 @@ namespace SmartBot.Plugins
 
             // Overwritten when game ends
             CopySeeds();
+
+            // Stop legend screenshots
+            wasLegend = IsLegend();
         }
 
         public override void OnTick()
