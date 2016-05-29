@@ -308,7 +308,6 @@ namespace SmartBot.Plugins
             screenshotAction = null;
             enemyClass = Card.CClass.NONE;
             friendClass = Card.CClass.NONE;
-            wasLegend = IsLegend();
         }
 
         public override void OnGameEnd()
