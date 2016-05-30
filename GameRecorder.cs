@@ -120,7 +120,6 @@ namespace SmartBot.Plugins
         public int ImageResizeWidth { get; set; }
 
         public bool IncludeLogs { get; set; }
-        public bool IncludeMulligan { get; set; }
         public bool IncludeSeeds { get; set; }
 
         public bool HidePersonalInfo { get; set; }
@@ -161,7 +160,6 @@ namespace SmartBot.Plugins
             ImageResizeHeight = 600;
             ImageResizeWidth = 800;
             IncludeLogs = true;
-            IncludeMulligan = true;
             IncludeSeeds = true;
             HidePersonalInfo = true;
             LogFriendRequests = true;
@@ -418,11 +416,6 @@ namespace SmartBot.Plugins
 
         private void CheckForUpdates()
         {
-            if (settings.DisableAutoUpdate)
-            {
-                return;
-            }
-
             try
             {
                 String pluginPath = "Plugins\\GameRecorder.cs";
@@ -436,7 +429,7 @@ namespace SmartBot.Plugins
                 }
 
                 // Get SHA of latest GameRecorder plugin
-                var branchesJson = fetchUrl(@"https://api.github.com/repos/levinson/GameRecorder/branches");
+                var branchesJson = fetchUrl("https://api.github.com/repos/levinson/GameRecorder/branches");
                 String shaPrefix = "\"sha\":\"";
                 int shaIndex = branchesJson.IndexOf(shaPrefix);
                 String gitCommitSha = branchesJson.Substring(shaIndex + shaPrefix.Length, 40);
@@ -445,7 +438,7 @@ namespace SmartBot.Plugins
                 String newFirstLine = "/** " + gitCommitSha + " */";
                 if (!firstLine.Equals(newFirstLine))
                 {
-                    String latestSource = fetchUrl(@"https://raw.githubusercontent.com/levinson/GameRecorder/master/GameRecorder.cs");
+                    String latestSource = fetchUrl("https://raw.githubusercontent.com/levinson/GameRecorder/master/GameRecorder.cs");
                     using (var stream = new FileStream(pluginPath, FileMode.Create, FileAccess.Write))
                     using (var writer = new StreamWriter(stream))
                     {
@@ -463,7 +456,10 @@ namespace SmartBot.Plugins
 
         public override void OnStarted()
         {
-            CheckForUpdates();
+            if (!settings.DisableAutoUpdate)
+            {
+                CheckForUpdates();
+            }
         }
 
         public override void OnStopped()
@@ -515,8 +511,6 @@ namespace SmartBot.Plugins
             {
                 TakeScreenshot("Mulligan");
             }
-
-            SaveMulligan();
         }
 
         public override void OnActionExecute(API.Actions.Action action)
@@ -997,73 +991,6 @@ namespace SmartBot.Plugins
             else
             {
                 writer.WriteLine(GetTimestampPrefix() + message);
-            }
-        }
-
-        private void SaveMulligan()
-        {
-            if (!settings.IncludeMulligan || !gameStarted)
-            {
-                return;
-            }
-
-            try
-            {
-                DirectoryInfo mulliganDirectory = new DirectoryInfo("Logs\\SmartMulligan");
-                if (!mulliganDirectory.Exists)
-                {
-                    Log("Failed to find the SmartMulligan directory!");
-                    return;
-                }
-
-                // Find the SmartMulligan history file
-                FileInfo mulliganFile = mulliganDirectory.GetFiles().First(file => file.Name.Equals("MulliganHistory.txt"));
-
-                if (DateTime.Now.AddMinutes(-1).CompareTo(mulliganFile.LastWriteTime) > 0)
-                {
-                    Log("Failed to find an active SmartMulligan history file!");
-                    return;
-                }
-
-                var mulliganLogs = new List<String>();
-                using (FileStream fs = File.OpenRead(mulliganFile.FullName))
-                using (BufferedStream bs = new BufferedStream(fs))
-                using (StreamReader sr = new StreamReader(bs))
-                {
-                    string line;
-                    while ((line = sr.ReadLine()) != null)
-                    {
-                        if (line.Contains("========================================="))
-                        {
-                            mulliganLogs.Clear();
-                        }
-                        else
-                        {
-                            mulliganLogs.Add(line);
-                        }
-                    }
-                }
-
-                // Write last output from SmartMulligan to file
-                string mulliganFilePath = currentGameFolder + "\\Turn_0_SmartMulligan.txt";
-                using (StreamWriter writer = new StreamWriter(mulliganFilePath))
-                {
-                    foreach (string line in mulliganLogs)
-                    {
-                        writer.WriteLine(line);
-                    }
-                }
-
-                if (settings.HidePersonalInfo)
-                {
-                    HideFileAccessTimes(mulliganFilePath);
-                }
-
-                Log("Copied SmartMulligan output");
-            }
-            catch (Exception e)
-            {
-                Log("Failed to save SmartMulligan output due to: " + e);
             }
         }
 
